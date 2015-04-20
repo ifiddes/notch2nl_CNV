@@ -24,8 +24,9 @@ class KmerModel(Target):
 
 def add_individual_to_graph(graph, k1mer_counts):
     for count, seq in count_reader(k1mer_counts):
-        graph.construct_individual_nodes(seq)
-        graph.construct_adjacencies(seq, source_seq=False)
+        if count > 2:
+            graph.construct_individual_nodes(seq)
+            graph.construct_adjacencies(seq, source_seq=False)
 
 
 def add_mole_to_graph(graph, mole_seq):
