@@ -183,10 +183,7 @@ class UnitigGraph(nx.Graph):
         """
         edges_to_remove = []
         nodes_to_remove = []
-        for subgraph in self.connected_component_iter():
-            # determine if this subgraph has a cycle - we know that this should be a tree, so if any node has
-            # degree greater than 2 there is a cycle coming off of it. We ignore self loops (as long as they are
-            # source)
+        for subgraph in self.connected_component_iter(internal=True):
             source_sequences = {tuple(subgraph.edge[a][b]['positions'].keys()) for a, b in subgraph.edges_iter() if
                      'positions' in subgraph.edge[a][b]}
             if len(source_sequences) == 1:
@@ -196,12 +193,17 @@ class UnitigGraph(nx.Graph):
                 # this subgraph has no anchors - can't know which paralog, if any, this came from. Remove this subgraph.
                 nodes_to_remove.extend(subgraph.nodes())
                 continue
+            # determine if this subgraph has a cycle - we know that this should be a tree, so if any node has
+            # degree greater than 2 there is a cycle coming off of it. We ignore self loops (as long as they are
+            # source)
             self_loop_nodes = [a for a, b in self.selfloop_edges() if 'source' in self.edge[a][b]]
             bubble_nodes = [n for n in subgraph.nodes_iter() if subgraph.degree(n) > 2 and n not in self_loop_nodes]
             # we count the number of source sequences each bubble node is attached to
             largest = max(len(x) for x in source_sequences)
             for n in bubble_nodes:
                 l, r = labels_from_node(n)
+                if 'positions' not in self.edge[l][r]:
+                    continue
                 if len(self.edge[l][r]['positions'].values()) == largest:
                     for a, b in self.edges(n):
                         if a == b:
