@@ -1,3 +1,5 @@
+from itertools import izip
+from sonLib.bioio import _getFileHandle as get_file_handle
 from jobTree.src.bioio import reverseComplement as reverse_complement
 
 
@@ -38,6 +40,25 @@ def strandless(k):
     reverse complement of the kmer lexicographically.
     """
     return sorted([k, reverse_complement(k)])[0]
+
+
+def fastq_reader(path_or_file):
+    """
+    This is a super fast fastq reader that expects things to be correct, I.E. 4 lines per entry.
+    """
+    handle = get_file_handle(path_or_file)
+    for name, seq, _, qual in izip(*[handle] * 4):
+        yield seq.rstrip()
+
+
+def count_reader(path_or_file):
+    """
+    This is a super fast jellyfish count reader that expects things to be correct, I.E. 2 lines per entry.
+    """
+    handle = get_file_handle(path_or_file)
+    rm = ">\n"
+    for count, seq in izip(*[handle] * 2):
+        yield int(count.translate(None, rm)), seq.translate(None, rm)
 
 
 def format_ratio(numerator, denominator):
