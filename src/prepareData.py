@@ -7,10 +7,10 @@ from jobTree.src.bioio import system
 
 class PrepareData(Target):
     """Takes the information from a paths namedtuple and runs all data preparation steps before running models"""
-    def __init__(self, uuid, paths):
+    def __init__(self, paths):
         Target.__init__(self)
         self.paths = paths
-            
+
     def run(self):
         # no need to do self. every damn time
         paths = self.paths
@@ -20,18 +20,16 @@ class PrepareData(Target):
             Target.addChildTargetFn(align_query, args=(paths.fastq, paths.bam, paths.out_dir, paths.uuid,
                                                        paths.aln_index))
         if not os.path.exists(paths.jf_counts):
-            Target.addChildTargetFn(run_jellyfish, args=(paths.out_dir, paths.jf_counts, paths.fastq, paths.uuid, 
+            Target.addChildTargetFn(run_jellyfish, args=(paths.out_dir, paths.jf_counts, paths.fastq, paths.uuid,
                                                          paths.kmer_size))
-        Target.setFollowOnTarget(SunModel(paths.uuid, paths))
+        Target.setFollowOnTarget(SunModel(paths))
 
 
 def download_query(fastq, out_dir, cghub_key, query_string, uuid):
     """
     Downloads data from CGHub BAM Slicer
     """
-    system(
-        """curl --silent "{}" -u "{}" | samtools bamshuf -Ou /dev/stdin {} | samtools bam2fq /dev/stdin > {}""".format(
-            query_string, "haussler:" + cghub_key, os.path.join(out_dir, "tmp"), fastq))
+    system("""curl --silent "{}" -u "{}" | samtools bamshuf -Ou - {} | samtools bam2fq - > {}""".format(query_string, "haussler:" + cghub_key, os.path.join(out_dir, "tmp"), fastq))
     if os.path.getsize(fastq) < 513:
         raise RuntimeError("curl did not download a BAM for {}. exiting.".format(uuid))
     os.remove(os.path.join(out_dir, "tmp"))

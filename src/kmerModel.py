@@ -23,11 +23,12 @@ class KmerModel(Target):
 
 def add_individual_to_graph(graph, fastq):
     for name, seq, qual in fastqRead(fastq):
-        graph.construct_nodes(name, seq)
-        graph.construct_adjacencies(seq)
+        graph.construct_individual_nodes(name, seq)
+        graph.construct_adjacencies(seq, source_seq=False)
+
 
 def add_mole_to_graph(graph, mole_seq):
     for name, seq in fastaRead(mole_seq):
         name, offset = name.split("_")
         graph.construct_ref_nodes(name, offset, seq)
-        graph.construct_adjacencies(seq)
+        graph.construct_adjacencies(seq, source_seq=True)

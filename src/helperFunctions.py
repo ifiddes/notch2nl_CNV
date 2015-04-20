@@ -1,19 +1,35 @@
 from jobTree.src.bioio import reverseComplement as reverse_complement
 
 
-def remove_label(edge):
+def remove_label(n):
     """
-    removes the left/right label from a edge, returning the actual kmer
+    removes the left/right label from a node, returning the actual kmer
     """
-    return edge[:-2]
+    return n[:-2]
 
 
-def create_labels(edge):
+def labels_from_node(n):
     """
-    returns the node names between a sequence edge given the edge (kmer)
+    given one node, returns both nodes
     """
-    k = remove_label(edge)
+    k = remove_label(n)
     return k + "_L", k + "_R"
+
+
+def labels_from_kmer(k):
+    """
+    given a kmer, returns a tuple of the two nodes
+    """
+    return k + "_L", k + "_R"
+
+
+def labeled_kmer_iter(kmers):
+    """
+    Given a set of kmers, yields each node individually
+    """
+    for k in kmers:
+        for n in labels_from_kmer(k):
+            yield n
 
 
 def strandless(k):

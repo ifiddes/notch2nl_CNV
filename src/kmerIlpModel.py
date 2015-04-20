@@ -32,7 +32,7 @@ class Block(object):
             # loop over the instances of this paralog
             for i in xrange(len(subgraph[start_a][start_b]['positions'][p])):
                 # find the start and stop node for each instance of this paralog
-                f = s = subgraph[start_a][start_b]['positions'][p][i]
+                s = subgraph[start_a][start_b]['positions'][p][i]
                 # loop over all remaining sequence edges and update the start as necessary
                 for new_a, new_b in sequence_edges[1:]:
                     new_s = subgraph[new_a][new_b]['positions'][p][i]
@@ -88,8 +88,11 @@ class KmerIlpModel(SequenceGraphLpProblem):
                  trash_penalty=1, expected_value_penalty=1, infer_c=None, infer_d=None, default_ploidy=2):
         SequenceGraphLpProblem.__init__(self)
         self.graph = UnitigGraph
+        # list of Block objects
         self.blocks = []
+        # maps Block objects to the paralogs they contain
         self.block_map = {x[0]: [] for x in UnitigGraph.paralogs}
+        # maps the genome start position of each paralog for plotting later
         self.offset_map = {x[0]: int(x[1]) for x in UnitigGraph.paralogs}
         self.normalizing = normalizing
         self.breakpoint_penalty = breakpoint_penalty
