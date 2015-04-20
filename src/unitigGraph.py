@@ -73,7 +73,7 @@ class UnitigGraph(nx.Graph):
                 self.edge[l][r]['positions'][name].append(i)
             assert len(self) % 2 == 0
 
-    def construct_individual_nodes(self, name, seq):
+    def construct_individual_nodes(self, seq):
         """
         Adds additional nodes for individual to find SNP bubbles.
         """
