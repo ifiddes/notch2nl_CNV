@@ -1,19 +1,20 @@
 #fastq_path = "/cluster/home/ifiddes/ifiddes_hive/notch_mike_snyder/snyder_notch.50mer.Counts.fa"
 fastq_path = "/home/ifiddes/hive/notch_mike_snyder/snyder_notch.50mer.Counts.fa"
-ref_path = "data/kmer_model_data/notch2nl_graph_hg38.fa"
+masked_ref_path = "data/kmer_model_data/notch2nl_masked_hg38.fa"
+unmasked_ref_path = "data/kmer_model_data/notch2nl_unmasked_hg38.fa"
 from src.unitigGraph import *
 from src.helperFunctions import *
 from src.kmerModel import *
 import cPickle as pickle
 graph = UnitigGraph(49)
-add_mole_to_graph(graph, ref_path)
+add_mole_to_graph(graph, unmasked_ref_path, masked_ref_path)
 add_individual_to_graph(graph, fastq_path)
 unpruned = graph.copy()
-pickle.dump(unpruned, open("unpruned_graph.pickle", "w"))
+#pickle.dump(unpruned, open("unpruned_graph.pickle", "w"))
 graph.prune_source_edges()
 graph.prune_individual_edges()
 graph.finish_build(graphviz=True)
-pickle.dump(graph, open("pruned_graph.pickle", "w"))
+#pickle.dump(graph, open("pruned_graph.pickle", "w"))
 """
 combos = set()
 for subgraph in graph.connected_component_iter(internal=True):
@@ -25,14 +26,11 @@ for subgraph in graph.connected_component_iter(internal=True):
     combos.add(source_sequences)
 """
 
-t = None
+subgraphs = []
 for subgraph in graph.connected_component_iter(internal=True):
     if len(frozenset(tuple(subgraph.edge[a][b]['positions'].keys()) for a, b in subgraph.edges_iter() if
                      'positions' in subgraph.edge[a][b])) > 1:
-        if t is None:
-            t = subgraph
-        if len(t) > len(subgraph):
-            t = subgraph
+            subgraphs.append(subgraph)
 
 pickle.dump(subgraph, open("subgraph.pickle", "w"))
 
@@ -59,3 +57,6 @@ for a, b in unpruned.edges_iter():
 
 for x in positions:
     positions[x] = sorted(positions[x], key = lambda x: x[0])
+
+subgraphs = list(graph.connected_component_iter(internal=True))
+subgraphs = sorted(subgraphs, key = lambda x: len(x))

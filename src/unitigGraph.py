@@ -29,6 +29,8 @@ class UnitigGraph(nx.Graph):
         self.is_built = False
         self.paralogs = []
         self.kmers = set()
+        # masked kmers stores kmers that were repeat masked and should be ignored in individual data
+        self.masked_kmers = set()
         self.normalizing_kmers = set()
         self.source_sequence_sizes = {}
 
@@ -47,93 +49,96 @@ class UnitigGraph(nx.Graph):
             self.normalizing_kmers.add(s)
         self.has_normalizing = True
 
-    def construct_ref_nodes(self, name, offset, seq):
+    def _build_nodes(self, kmer, name, pos):
         """
-        Constructs nodes for the reference portion of the graph. Name should be the paralog name,
-        while offset is the position away from the start of the chromosome for that paralog.
+        Takes a kmer, and adds it to the graph if it does not contain N.
+        Returns the strandless version of this kmer, that is now in the graph.
+        """
+        strandless_kmer = strandless(kmer)
+        l, r = labels_from_kmer(strandless_kmer)
+        # keep track of the graph as it grows and make sure its always an even # of nodes
+        prev_size = len(self)
+        if self.has_node(l) is not True and self.has_node(r) is not True:
+            # should not be possible to have just left or just right
+            assert not (self.has_node(l) or self.has_node(r))
+            self.add_node(l)
+            self.add_node(r)
+            self.add_edge(l, r, count=1, positions=defaultdict(list))
+            self.edge[l][r]['positions'][name].append(pos)
+            assert prev_size + 2 == len(self), (pos, prev, kmer)
+        else:
+            self.edge[l][r]['count'] += 1
+            self.edge[l][r]['positions'][name].append(pos)
+            assert prev_size == len(self), (pos, prev, kmer)
+        return strandless_kmer
+
+    def _determine_orientation(self, prev, prev_strandless, kmer, kmer_strandless):
+        if prev == prev_strandless:
+            # exiting right side of previous kmer
+            if kmer == kmer_strandless:
+                # entering left side of next kmer
+                l, r = prev + "_R", kmer + "_L"
+            else:
+                # entering right side of next kmer
+                l, r = prev + "_R", reverse_complement(kmer) + "_R"
+        else:
+            # exiting left side of previous kmer
+            if kmer == kmer_strandless:
+                # entering left side of next kmer
+                l, r = reverse_complement(prev) + "_L", kmer + "_L"
+            else:
+                # entering right side of next kmer
+                l, r = reverse_complement(prev) + "_L", reverse_complement(kmer) + "_R"
+        return l, r
+
+    def _add_kmer(self, prev, prev_strandless, kmer, name, pos):
+        """
+        Adds L/R nodes, sequence edge and adjacency edge to the graph
+        """
+        kmer_strandless = self._build_nodes(kmer, name, pos, source_seq)
+        # make sure we aren't adding edges - they should already exist now
+        prev_size = len(self)
+        l, r = self._determine_orientation(prev, prev_strandless, kmer, kmer_strandless)
+        self.add_edge(l, r)
+        self.edge[l][r]['source'] = True
+        # no new nodes should be created in this process
+        assert prev_size == len(self), (i, prev, kmer)
+        self.kmers.add(kmer)
+        return kmer, kmer_strandless
+
+    def add_source_sequences(self, name, offset, masked_seq, unmasked_seq):
+        """
+        masked_seq should be the same length as unmasked_seq and represent the repeat masked version.
         """
         self.paralogs.append([name, offset])
-        self.source_sequence_sizes[name] = len(seq)
-        for i in xrange(len(seq) - self.kmer_size + 1):
-            kmer = strandless(seq[i:i + self.kmer_size].upper())
+        self.source_sequence_sizes[name] = len(masked_seq)
+        # just in case they aren't upper case
+        masked_seq = masked_seq.upper()
+        unmasked_seq = unmasked_seq.upper()
+        # edge case: there is a N in the first k bases
+        for start in xrange(len(masked_seq) - self.kmer_size + 1):
+            prev_kmer = masked_seq[start:start + self.kmer_size]
+            if "N" not in prev_kmer:
+                break
+        self._build_nodes(prev_kmer, name, start)
+        for i in xrange(start, len(masked_seq) - self.kmer_size + 1):
+            if "N" in prev_kmer:
+                continue
+            kmer = masked_seq[i:i + self.kmer_size]
+            unmasked_kmer = unmasked_seq[i:i + self.kmer_size]
             if "N" in kmer:
+                self.masked_kmers.add(unmasked_kmer)
                 continue
-            self.kmers.add(kmer)
-            l, r = labels_from_kmer(kmer)
-            if self.has_node(l) is not True and self.has_node(r) is not True:
-                # should not be possible to have just left or just right
-                assert not (self.has_node(l) or self.has_node(r))
-                self.add_node(l)
-                self.add_node(r)
-                self.add_edge(l, r, count=1, positions=defaultdict(list))
-                self.edge[l][r]['positions'][name].append(i)
-            else:
-                self.edge[l][r]['count'] += 1
-                self.edge[l][r]['positions'][name].append(i)
-            assert len(self) % 2 == 0
+            prev_strandless = strandless(prev_kmer)
+            prev_kmer, prev_strandless = self._add_kmer(prev_kmer, prev_strandless, kmer, name, i)
 
-    def construct_individual_nodes(self, seq):
-        """
-        Adds additional nodes for individual to find SNP bubbles.
-        """
-        for i in xrange(len(seq) - self.kmer_size + 1):
-            kmer = strandless(seq[i:i + self.kmer_size].upper())
-            if "N" in kmer:
-                continue
-            self.kmers.add(kmer)
-            l, r = labels_from_kmer(kmer)
-            if self.has_node(l) is not True and self.has_node(r) is not True:
-                # should not be possible to have just left or just right
-                assert not (self.has_node(l) or self.has_node(r))
-                self.add_node(l)
-                self.add_node(r)
-                self.add_edge(l, r)
-            assert len(self) % 2 == 0
+    def add_individual_sequences(self, seq):
+        prev, kmer = seq[:-1], seq[1:]
+        strandless_prev = strandless(prev)
+        strandless_kmer = strandless(kmer)
+        if prev not in self.masked_kmers and kmer not in self.masked_kmers:
+            if strandless_prev not in self.kmers or strandless_r not in self.kmers:
 
-    def construct_adjacencies(self, seq, source_seq=True):
-        """
-        Constructs adjacency edges.
-        """
-        prev = seq[:self.kmer_size].upper()
-        prev_strandless = strandless(prev)
-        for i in xrange(1, len(seq) - self.kmer_size + 1):
-            prev_size = len(self)
-            kmer = seq[i:i + self.kmer_size].upper()
-            if "N" in kmer or "N" in prev:
-                continue
-            kmer_strandless = strandless(kmer)
-            if prev == prev_strandless:
-                # exiting right side of previous kmer
-                if kmer == kmer_strandless:
-                    # entering left side of next kmer
-                    l, r = prev + "_R", kmer + "_L"
-                    self.add_edge(l, r)
-                    if source_seq is True:
-                        self.edge[l][r]['source'] = True
-                else:
-                    # entering right side of next kmer
-                    l, r = prev + "_R", reverse_complement(kmer) + "_R"
-                    self.add_edge(l, r)
-                    if source_seq is True:
-                        self.edge[l][r]['source'] = True
-            else:
-                # exiting left side of previous kmer
-                if kmer == kmer_strandless:
-                    # entering left side of next kmer
-                    l, r = reverse_complement(prev) + "_L", kmer + "_L"
-                    self.add_edge(l, r)
-                    if source_seq is True:
-                        self.edge[l][r]['source'] = True
-                else:
-                    # entering right side of next kmer
-                    l, r = reverse_complement(prev) + "_L", reverse_complement(kmer) + "_R"
-                    self.add_edge(l, r)
-                    if source_seq is True:
-                        self.edge[l][r]['source'] = True
-            assert prev_size == len(self)
-            prev = kmer
-            prev_strandless = kmer_strandless
-        self.has_sequences = True
 
     def prune_source_edges(self):
         """
@@ -142,8 +147,6 @@ class UnitigGraph(nx.Graph):
         2) adjacent nodes have different counts
         3) these edges came from the source sequence and not from individual reads
         """
-        assert self.has_sequences
-        assert self.is_pruned is False
         for n in self.nodes_iter():
             this_source_degree = self.source_degree(n)
             if this_source_degree > 1:
@@ -155,7 +158,7 @@ class UnitigGraph(nx.Graph):
                     elif remove_label(a) == remove_label(b):
                         # never remove sequence edges
                         continue
-                    if 'source' in self.edge[a][b]:
+                    elif 'source' in self.edge[a][b]:
                         # only remove source edges (for now)
                         self.remove_edge(a, b)
             elif this_source_degree == 1:
@@ -167,7 +170,7 @@ class UnitigGraph(nx.Graph):
                     elif remove_label(a) == remove_label(b):
                         # never remove sequence edges
                         continue
-                    if 'source' in self.edge[a][b]:
+                    elif 'source' in self.edge[a][b]:
                         # only remove source edges (for now)
                         # find the sequence edges associated with a and b and make sure they have the same count
                         dest_a, dest_b = labels_from_node(b)
@@ -177,11 +180,11 @@ class UnitigGraph(nx.Graph):
 
     def prune_individual_edges(self):
         """
-        Removes individual edges that join unitigs together. Bubble edges are defined as edges which have a degree of
-        at least 3.
+        For each remaining subgraph, determine if it is a unitig or if read data are joining unitigs.
+        If no unitig information is present in this subgraph, remove it - we can't know which paralog(s), if any,
+        these sequences came from. Otherwise, the following algorithm applies:
+        For each source sequence in
         """
-        edges_to_remove = []
-        nodes_to_remove = []
         for subgraph in self.connected_component_iter(internal=True):
             source_sequences = {tuple(subgraph.edge[a][b]['positions'].iterkeys()) for a, b in subgraph.edges_iter() if
                      'positions' in subgraph.edge[a][b]}
@@ -237,8 +240,6 @@ class UnitigGraph(nx.Graph):
 
         If graphviz is True, adds a label tag to each sequence edge to improve understandability in graphviz
         """
-        # assert self.is_pruned is True and self.has_sequences is True
-        # assert self.is_built is False
         if graphviz is True:
             self_loops = set(self.selfloop_edges())
             for edge in self.edges():
