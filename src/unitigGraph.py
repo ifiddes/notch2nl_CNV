@@ -196,7 +196,7 @@ class UnitigGraph(nx.Graph):
             # determine if this subgraph has a cycle - we know that this should be a tree, so if any node has
             # degree greater than 2 there is a cycle coming off of it. We ignore self loops (as long as they are
             # source)
-            self_loop_nodes = [a for a, b in self.selfloop_edges() if 'source' in self.edge[a][b]]
+            self_loop_nodes = [a for a, b in subgraph.selfloop_edges() if 'source' in subgraph.edge[a][b]]
             bubble_nodes = [n for n in subgraph.nodes_iter() if subgraph.degree(n) > 2 and n not in self_loop_nodes]
             # we count the number of source sequences each bubble node is attached to
             largest = max(len(x) for x in source_sequences)
