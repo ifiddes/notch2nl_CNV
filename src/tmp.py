@@ -1,4 +1,5 @@
-fastq_path = "/cluster/home/ifiddes/ifiddes_hive/notch_mike_snyder/snyder_notch.50mer.Counts.fa"
+#fastq_path = "/cluster/home/ifiddes/ifiddes_hive/notch_mike_snyder/snyder_notch.50mer.Counts.fa"
+fastq_path = "/home/ifiddes/hive/notch_mike_snyder/snyder_notch.50mer.Counts.fa"
 ref_path = "data/kmer_model_data/notch2nl_graph_hg38.fa"
 from src.unitigGraph import *
 from src.helperFunctions import *
@@ -34,3 +35,27 @@ for subgraph in graph.connected_component_iter(internal=True):
             t = subgraph
 
 pickle.dump(subgraph, open("subgraph.pickle", "w"))
+
+
+ends = [x for x in subgraph.nodes_iter() if subgraph.degree(x) == 1]
+dist = 30
+tmp = subgraph.copy()
+for n in ends:
+    for i in xrange(dist):
+        adj = unpruned.adj[n]
+        for inner_node in adj:
+            tmp.add_node(inner_node)
+            tmp.node[inner_node] = graph.node[inner_node]
+            for a, b in unpruned.edges_iter(inner_node):
+                tmp.add_edge(a, b)
+                tmp.edge[a][b] = graph.edge[a][b]
+
+positions = defaultdict(list)
+for a, b in unpruned.edges_iter():
+    if 'positions' in unpruned.edge[a][b]:
+        for para in unpruned.edge[a][b]['positions']:
+            for val in unpruned.edge[a][b]['positions'][para]:
+                positions[para].append((val, remove_label(a)))
+
+for x in positions:
+    positions[x] = sorted(positions[x], key = lambda x: x[0])
