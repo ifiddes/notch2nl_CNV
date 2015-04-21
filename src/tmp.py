@@ -7,9 +7,13 @@ import cPickle as pickle
 graph = UnitigGraph(49)
 add_mole_to_graph(graph, ref_path)
 add_individual_to_graph(graph, fastq_path)
+unpruned = graph.copy()
+pickle.dump(unpruned, open("unpruned_graph.pickle", "w"))
 graph.prune_source_edges()
-pickle.dump(graph, open("unpruned_graph.pickle", "w"))
-
+graph.prune_individual_edges()
+graph.finish_build(graphviz=True)
+pickle.dump(graph, open("pruned_graph.pickle", "w"))
+"""
 combos = set()
 for subgraph in graph.connected_component_iter(internal=True):
     self_loop_nodes = [a for a, b in subgraph.selfloop_edges() if 'source' in graph.edge[a][b]]
@@ -18,6 +22,15 @@ for subgraph in graph.connected_component_iter(internal=True):
     source_sequences = frozenset(tuple(subgraph.edge[a][b]['positions'].keys()) for a, b in subgraph.edges_iter() if
                      'positions' in subgraph.edge[a][b])
     combos.add(source_sequences)
+"""
 
-print combos
-pickle.dump(graph, open("pruned_graph.pickle", "w"))
+t = None
+for subgraph in graph.connected_component_iter(internal=True):
+    if len(frozenset(tuple(subgraph.edge[a][b]['positions'].keys()) for a, b in subgraph.edges_iter() if
+                     'positions' in subgraph.edge[a][b])) > 1:
+        if t is None:
+            t = subgraph
+        if len(t) > len(subgraph):
+            t = subgraph
+
+pickle.dump(subgraph, open("subgraph.pickle", "w"))

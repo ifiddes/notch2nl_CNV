@@ -30,8 +30,7 @@ class UnitigGraph(nx.Graph):
         self.paralogs = []
         self.kmers = set()
         self.normalizing_kmers = set()
-        self.sizes = {}
-        self.weights = {}
+        self.source_sequence_sizes = {}
 
     def add_normalizing(self, seq):
         """
@@ -54,7 +53,7 @@ class UnitigGraph(nx.Graph):
         while offset is the position away from the start of the chromosome for that paralog.
         """
         self.paralogs.append([name, offset])
-        self.sizes[name] = len(seq)
+        self.source_sequence_sizes[name] = len(seq)
         for i in xrange(len(seq) - self.kmer_size + 1):
             kmer = strandless(seq[i:i + self.kmer_size].upper())
             if "N" in kmer:
@@ -184,7 +183,7 @@ class UnitigGraph(nx.Graph):
         edges_to_remove = []
         nodes_to_remove = []
         for subgraph in self.connected_component_iter(internal=True):
-            source_sequences = {tuple(subgraph.edge[a][b]['positions'].keys()) for a, b in subgraph.edges_iter() if
+            source_sequences = {tuple(subgraph.edge[a][b]['positions'].iterkeys()) for a, b in subgraph.edges_iter() if
                      'positions' in subgraph.edge[a][b]}
             if len(source_sequences) == 1:
                 # no bubbles to resolve here
@@ -236,7 +235,7 @@ class UnitigGraph(nx.Graph):
         """
         Finishes building the graph.
 
-        If graphviz is true, adds a label tag to each sequence edge to improve understandability in graphviz
+        If graphviz is True, adds a label tag to each sequence edge to improve understandability in graphviz
         """
         # assert self.is_pruned is True and self.has_sequences is True
         # assert self.is_built is False
@@ -261,8 +260,6 @@ class UnitigGraph(nx.Graph):
                 else:
                     self.edge[l][r]['color'] = "green"
         self.paralogs = sorted(self.paralogs, key=lambda x: x[0])
-        # default weight for each kmer is 2.0 (for diploid) unless derived weights are used (use weight_kmers())
-        self.weights = {x: 2.0 for x in self.kmers}
         self.is_built = True
 
     def connected_component_iter(self, internal=False):
