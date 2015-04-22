@@ -25,8 +25,8 @@ class KmerModel(Target):
 
 def add_individual_to_graph(graph, k1mer_counts):
     for count, seq in count_reader(k1mer_counts):
-        if count > 1:
-            graph.add_individual_sequences(seq)
+        #if count > 1:
+        graph.add_individual_sequences(seq)
 
 
 def add_mole_to_graph(graph, unmasked_mole, masked_mole):

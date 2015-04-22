@@ -65,11 +65,11 @@ class UnitigGraph(nx.Graph):
             self.add_node(r)
             self.add_edge(l, r, count=1, positions=defaultdict(list))
             self.edge[l][r]['positions'][name].append(pos)
-            assert prev_size + 2 == len(self), (pos, prev, kmer)
+            assert prev_size + 2 == len(self)
         else:
             self.edge[l][r]['count'] += 1
             self.edge[l][r]['positions'][name].append(pos)
-            assert prev_size == len(self), (pos, prev, kmer)
+            assert prev_size == len(self)
         return strandless_kmer
 
     def _determine_orientation(self, prev, prev_strandless, kmer, kmer_strandless):
@@ -95,14 +95,14 @@ class UnitigGraph(nx.Graph):
         """
         Adds L/R nodes, sequence edge and adjacency edge to the graph
         """
-        kmer_strandless = self._build_nodes(kmer, name, pos, source_seq)
+        kmer_strandless = self._build_nodes(kmer, name, pos)
         # make sure we aren't adding edges - they should already exist now
         prev_size = len(self)
         l, r = self._determine_orientation(prev, prev_strandless, kmer, kmer_strandless)
         self.add_edge(l, r)
         self.edge[l][r]['source'] = True
         # no new nodes should be created in this process
-        assert prev_size == len(self), (i, prev, kmer)
+        assert prev_size == len(self), (pos, prev, kmer)
         self.kmers.add(kmer)
         return kmer, kmer_strandless
 
@@ -120,25 +120,39 @@ class UnitigGraph(nx.Graph):
             prev_kmer = masked_seq[start:start + self.kmer_size]
             if "N" not in prev_kmer:
                 break
-        self._build_nodes(prev_kmer, name, start)
+        prev_kmer = masked_seq[start:start + self.kmer_size]
         for i in xrange(start, len(masked_seq) - self.kmer_size + 1):
             if "N" in prev_kmer:
                 continue
             kmer = masked_seq[i:i + self.kmer_size]
             unmasked_kmer = unmasked_seq[i:i + self.kmer_size]
             if "N" in kmer:
-                self.masked_kmers.add(unmasked_kmer)
+                self.masked_kmers.add(strandless(unmasked_kmer))
                 continue
             prev_strandless = strandless(prev_kmer)
             prev_kmer, prev_strandless = self._add_kmer(prev_kmer, prev_strandless, kmer, name, i)
 
     def add_individual_sequences(self, seq):
+        """
+        Adds individual sequences from jellyfish kmer+1 counts.
+        """
+        assert len(seq) == self.kmer_size + 1
         prev, kmer = seq[:-1], seq[1:]
         strandless_prev = strandless(prev)
         strandless_kmer = strandless(kmer)
-        if prev not in self.masked_kmers and kmer not in self.masked_kmers:
-            if strandless_prev not in self.kmers or strandless_r not in self.kmers:
-
+        if strandless_prev not in self.masked_kmers and strandless_kmer not in self.masked_kmers:
+            # add nodes if necessary
+            for k in [strandless_prev, strandless_kmer]:
+                l, r = labels_from_kmer(k)
+                if self.has_node(l) is not True and self.has_node(r) is not True:
+                    # should not be possible to have just left or just right
+                    assert not (self.has_node(l) or self.has_node(r))
+                    self.add_node(l)
+                    self.add_node(r)
+                    self.add_edge(l, r)
+            # build adjacency edge
+            l, r = self._determine_orientation(prev, strandless_prev, kmer, strandless_kmer)
+            self.add_edge(l, r)
 
     def prune_source_edges(self):
         """
@@ -185,6 +199,8 @@ class UnitigGraph(nx.Graph):
         these sequences came from. Otherwise, the following algorithm applies:
         For each source sequence in
         """
+        nodes_to_remove = []
+        edges_to_remove = []
         for subgraph in self.connected_component_iter(internal=True):
             source_sequences = {tuple(subgraph.edge[a][b]['positions'].iterkeys()) for a, b in subgraph.edges_iter() if
                      'positions' in subgraph.edge[a][b]}
@@ -205,6 +221,7 @@ class UnitigGraph(nx.Graph):
             for n in bubble_nodes:
                 l, r = labels_from_node(n)
                 if 'positions' not in self.edge[l][r]:
+                    # ignore individual edges
                     continue
                 if len(self.edge[l][r]['positions'].values()) == largest:
                     for a, b in self.edges(n):
