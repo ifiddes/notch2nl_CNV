@@ -19,14 +19,12 @@ class KmerModel(Target):
         graph.add_normalizing(paths.normalizing)
         add_mole_to_graph(graph, paths.mole_seq)
         add_individual_to_graph(graph, paths.k1mer_counts)
-        graph.prune_source_edges()
-        graph.prune_individual_edges()
-
+        graph.prune_edges()
 
 def add_individual_to_graph(graph, k1mer_counts):
     for count, seq in count_reader(k1mer_counts):
-        #if count > 1:
-        graph.add_individual_sequences(seq)
+        if count > 1:
+            graph.add_individual_sequence(seq)
 
 
 def add_mole_to_graph(graph, unmasked_mole, masked_mole):
@@ -41,4 +39,4 @@ def add_mole_to_graph(graph, unmasked_mole, masked_mole):
             offset = int(offset)
         except TypeError:
             raise TypeError("Naming convention for input reference fasta is not right. >Sequence_Offset")
-        graph.add_source_sequences(name, offset, masked_seq, unmasked_seq)
+        graph.add_source_sequence(name, offset, masked_seq, unmasked_seq)

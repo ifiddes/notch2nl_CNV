@@ -8,7 +8,9 @@ from src.kmerModel import *
 import cPickle as pickle
 graph = UnitigGraph(49)
 add_mole_to_graph(graph, unmasked_ref_path, masked_ref_path)
+len(graph)
 add_individual_to_graph(graph, fastq_path)
+len(graph)
 unpruned = graph.copy()
 #pickle.dump(unpruned, open("unpruned_graph.pickle", "w"))
 graph.prune_source_edges()
@@ -59,4 +61,30 @@ for x in positions:
     positions[x] = sorted(positions[x], key = lambda x: x[0])
 
 subgraphs = list(graph.connected_component_iter(internal=True))
-subgraphs = sorted(subgraphs, key = lambda x: len(x))
+subgraphs = sorted(subgraphs, key=lambda x: len(x))
+
+
+from src.unitigGraph import *
+from src.helperFunctions import *
+from src.kmerModel import *
+masked_seq = "NATGCACANNNGAAGAGAG"
+unmasked_seq = "AATGCACAACGAAGAGAG"
+name = "A"
+offset = 0
+graph = UnitigGraph(5)
+graph.add_source_sequence(name, offset, masked_seq, unmasked_seq)
+
+
+tmp = []
+for l, r in graph.edges_iter():
+    if 'positions' in graph.edge[l][r] and 'Notch2NL-A' in graph.edge[l][r]['positions']:
+        for x in graph.edge[l][r]['positions']['Notch2NL-A']:
+            if x == 1224:
+                print l[:-2]
+
+
+unmasked_seq = "GCATTTTAAGACTGTGCTGTTATAAAACCTCGGGCCACTTAACTGATTAATCATGGCAATGAGGGCAGGGACCAGAAAAGAGTCTTTAGAACCTGTCATCCCCACACAGAAGAGCAACTTTCAGGGAAACACCCTTATCTTTCCATTTTCAGACCCCGGGAGGTGTGAGGGTGGAAAGGCTAGGTAGAGAAGAGAGCAGAAAGGAGATGAGATGACACAACCAGGATTCTCCGAAGCTGGGCTTGAAGTCCTCAAGAAAAACTCCCATGAACAAGGAAGGAAGAGTGAAGAAAAAAACAGGGATACCTGGAACTGGACAAAAGTAAAAAGATAGAAGGATACTTTTTTTCCCCCAGAAGAAGTCTGTCACAAAAGCAAACCTGCAAATATACGATCAGTATAACACCCAAGAAAATGACACATGCGGC"
+masked_seq = unmasked_seq
+graph = UnitigGraph(49)
+graph.construct_ref_nodes(name, offset, masked_seq, unmasked_seq)
+graph.construct_adjacencies(masked_seq)
