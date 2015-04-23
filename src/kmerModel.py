@@ -49,4 +49,4 @@ def add_mole_to_graph(graph, unmasked_mole, masked_mole):
         seq_map[(name, offset)] = [masked_seq, unmasked_seq]
         graph.add_masked_kmers(masked_seq, unmasked_seq)
     for (name, offset), (masked_seq, unmasked_seq) in seq_map.iteritems():
-         graph.add_source_sequence(name, offset, masked_seq)
+         graph.add_source_sequence(name, offset, masked_seq, unmasked_seq)

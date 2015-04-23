@@ -190,30 +190,34 @@ class UnitigGraph(nx.Graph):
             if "N" in masked_seq[i:i + self.kmer_size]:
                 self.masked_kmers.add(canonical(unmasked_seq[i:i + self.kmer_size]))
 
-    def add_source_sequence(self, name, offset, masked_seq):
+    def add_source_sequence(self, name, offset, masked_seq, unmasked_seq):
         """
         masked_seq should be the same length as unmasked_seq and represent the repeat masked version.
         """
         self.paralogs.append([name, offset])
         self.source_sequence_sizes[name] = len(masked_seq)
         prev_kmer = masked_seq[:self.kmer_size]
+        prev_kmer_unmasked = unmasked_seq[:self.kmer_size]
         prev_pos = 0
         for i in xrange(1, len(masked_seq) - self.kmer_size + 1):
-            assert len(self.masked_kmers & self.kmers) == 0
             kmer = masked_seq[i:i + self.kmer_size]
-            if "N" in prev_kmer:
+            kmer_unmasked = unmasked_seq[i:i + self.kmer_size]
+            assert len(self.masked_kmers & self.kmers) == 0, (i, kmer, prev_pos, prev_kmer)
+            if canonical(prev_kmer_unmasked) in self.masked_kmers:
                 prev_kmer = kmer
+                prev_kmer_unmasked = kmer_unmasked
                 prev_pos = i
                 continue
-            elif "N" in kmer:
+            elif canonical(kmer_unmasked) in self.masked_kmers:
                 continue
             else:
                 prev_kmer = masked_seq[prev_pos:prev_pos + self.kmer_size]
-                assert "N" not in prev_kmer and "N" not in kmer
+                assert "N" not in prev_kmer and "N" not in kmer, (prev_pos, prev_kmer, i, kmer)
                 self._build_nodes(prev_kmer, prev_pos, name)
                 self._build_nodes(kmer, i, name)
                 self._add_adjacency(prev_kmer, kmer)
                 prev_kmer = kmer
+                prev_kmer_unmasked = kmer_unmasked
                 prev_pos = i
 
     def add_individual_sequence(self, seq):
