@@ -33,6 +33,8 @@ class UnitigGraph(nx.Graph):
         self.masked_kmers = set()
         self.normalizing_kmers = set()
         self.source_sequence_sizes = {}
+        # this is for debugging - stores kmers that appear to be both masked and unmasked
+        self.kmers_masked_and_unmasked = set()
 
     def add_normalizing(self, seq):
         """
@@ -193,16 +195,23 @@ class UnitigGraph(nx.Graph):
         masked_seq = masked_seq.upper()
         unmasked_seq = unmasked_seq.upper()
         prev_kmer = masked_seq[:self.kmer_size]
+        unmasked_prev = canonical(unmasked_seq[:self.kmer_size])
         prev_pos = 0
         for i in xrange(1, len(masked_seq) - self.kmer_size + 1):
             kmer = masked_seq[i:i + self.kmer_size]
-            if "N" in prev_kmer:
-                self.masked_kmers.add(canonical(unmasked_seq[prev_pos:prev_pos + self.kmer_size]))
+            unmasked_kmer = canonical(masked_seq[i:i + self.kmer_size])
+            if unmasked_kmer in self.masked_kmers:
+                self.kmers_masked_and_unmasked.add(unmasked_kmer)
+                continue
+            elif "N" in prev_kmer:
+                self.masked_kmers.add(unmasked_prev)
+                assert len(self.kmers & self.masked_kmers) == 0, ("1", self.kmers & self.masked_kmers, prev_kmer, kmer, unmasked_kmer, prev_pos, i, name)
                 prev_kmer = kmer
                 prev_pos = i
                 continue
             elif "N" in kmer:
-                self.masked_kmers.add(canonical(unmasked_seq[i:i + self.kmer_size]))
+                self.masked_kmers.add(unmasked_kmer)
+                assert len(self.kmers & self.masked_kmers) == 0, ("2", self.kmers & self.masked_kmers, prev_kmer, kmer, unmasked_kmer, prev_pos, i, name)
                 continue
             else:
                 prev_kmer = masked_seq[prev_pos:prev_pos + self.kmer_size]
@@ -210,12 +219,11 @@ class UnitigGraph(nx.Graph):
                 self._build_nodes(prev_kmer, prev_pos, name)
                 self._build_nodes(kmer, i, name)
                 self._add_adjacency(prev_kmer, kmer)
-                try:
-                    assert len(self.kmers & self.masked_kmers) == 0, (self.kmers & self.masked_kmers, prev_kmer, kmer, prev_pos, i, name)
-                except:
-                    a = 1
+                assert len(self.kmers & self.masked_kmers) == 0, ("3", self.kmers & self.masked_kmers, prev_kmer, kmer, unmasked_kmer, prev_pos, i, name)
                 prev_kmer = kmer
+                unmasked_prev = unmasked_kmer
                 prev_pos = i
+        print len(self.kmers_masked_and_unmasked)
 
     def add_individual_sequence(self, seq):
         """
