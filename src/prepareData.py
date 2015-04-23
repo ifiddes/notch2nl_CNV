@@ -5,6 +5,7 @@ from jobTree.scriptTree.target import Target
 from jobTree.src.bioio import system
 
 
+
 class PrepareData(Target):
     """Takes the information from a paths namedtuple and runs all data preparation steps before running models"""
     def __init__(self, paths):

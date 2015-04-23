@@ -1,7 +1,7 @@
 from itertools import izip
 from src.kmerIlpModel import KmerIlpModel
 from src.unitigGraph import UnitigGraph
-from src.helperFunctions import count_reader
+from src.helperFunctions import count_reader, canonical
 from jobTree.src.bioio import fastaRead as fasta_read
 from jobTree.scriptTree.target import Target
 
@@ -48,5 +48,5 @@ def add_mole_to_graph(graph, unmasked_mole, masked_mole):
         unmasked_seq = unmasked_seq.upper()
         seq_map[(name, offset)] = [masked_seq, unmasked_seq]
         graph.add_masked_kmers(masked_seq, unmasked_seq)
-        for (name, offset), (masked_seq, unmasked_seq) in seq_map.iteritems():
-            graph.add_source_sequence(name, offset, masked_seq)
+    for (name, offset), (masked_seq, unmasked_seq) in seq_map.iteritems():
+         graph.add_source_sequence(name, offset, masked_seq)

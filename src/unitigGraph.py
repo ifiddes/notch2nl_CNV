@@ -199,6 +199,7 @@ class UnitigGraph(nx.Graph):
         prev_kmer = masked_seq[:self.kmer_size]
         prev_pos = 0
         for i in xrange(1, len(masked_seq) - self.kmer_size + 1):
+            assert len(self.masked_kmers & self.kmers) == 0
             kmer = masked_seq[i:i + self.kmer_size]
             if "N" in prev_kmer:
                 prev_kmer = kmer
