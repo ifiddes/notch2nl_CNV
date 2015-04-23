@@ -40,7 +40,7 @@ def run_jellyfish(target, out_dir, jf_counts, fastq, uuid, kmer_size):
     Runs jellyfish. -C flag is set to count both strands together.
     """
     jf_file = os.path.join(out_dir, uuid + ".jf")
-    system("jellyfish count -C -m {} -s 300M -o {} {}".format(kmer_size, jf_file, fastq))
+    system("jellyfish count -C -m {} --bf-size 3G -s 300M -o {} {}".format(kmer_size, jf_file, fastq))
     system("jellyfish dump {} > {}".format(jf_file, jf_counts))
     os.remove(jf_file)
 
