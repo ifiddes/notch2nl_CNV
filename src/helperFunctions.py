@@ -34,9 +34,9 @@ def labeled_kmer_iter(kmers):
             yield n
 
 
-def strandless(k):
+def canonical(k):
     """
-    Returns the strandless version of this kmer. This is defined as whichever comes first, the kmer or the
+    Returns the canonical version of this kmer. This is defined as whichever comes first, the kmer or the
     reverse complement of the kmer lexicographically.
     """
     return sorted([k, reverse_complement(k)])[0]

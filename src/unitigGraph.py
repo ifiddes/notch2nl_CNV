@@ -1,6 +1,6 @@
 import networkx as nx
 from collections import defaultdict
-from src.helperFunctions import remove_label, labels_from_kmer, labels_from_node, labeled_kmer_iter, strandless
+from src.helperFunctions import remove_label, labels_from_kmer, labels_from_node, labeled_kmer_iter, canonical
 from jobTree.src.bioio import reverseComplement as reverse_complement
 
 
@@ -8,12 +8,12 @@ class UnitigGraph(nx.Graph):
     """
     This UnitigGraph uses a sequence edge/adjacency edge paradigm to represent both strands without implementing
     a full bidirected DeBruijn graph. This paradigm works as follows:
-    Each (strandless) kmer is assigned two nodes in the graph, a left and right node. A undirected edge connects these
+    Each (canonical) kmer is assigned two nodes in the graph, a left and right node. A undirected edge connects these
     two nodes called a sequence edge. Adjacency edges are undirected edges that connect left or right nodes to their
     neighbor in the input sequence. In this way, you can enter or exit a kmer from either side, creating a bidirected
     graph. Any path through this graph must alternate between sequence edges and adjacency edges.
 
-    Strandless kmers are defined as whichever comes first lexicographically, the kmer or its reverse complement. This
+    canonical kmers are defined as whichever comes first lexicographically, the kmer or its reverse complement. This
     is so that we can properly represent input sequencing data which we do not have strand information for.
 
     To finish representing a UnitigGraph, this resulting graph must be pruned. Any node which has more than one
@@ -43,7 +43,7 @@ class UnitigGraph(nx.Graph):
         This is how jellyfish in the -C mode will report the kmer.
         """
         for i in xrange(len(seq) - self.kmer_size + 1):
-            s = strandless(seq[i:i + self.kmer_size].upper())
+            s = canonical(seq[i:i + self.kmer_size].upper())
             if "N" in s:
                 continue
             self.normalizing_kmers.add(s)
@@ -51,30 +51,31 @@ class UnitigGraph(nx.Graph):
 
     def _build_nodes(self, kmer, name, pos):
         """
-        Takes a kmer, and adds it to the graph if it does not contain N.
-        Returns the strandless version of this kmer, that is now in the graph.
+        Takes a kmer, and adds it to the graph, constructing a sequence edge for the kmer.
+        Returns the canonical representation of this kmer.
         """
-        strandless_kmer = strandless(kmer)
-        l, r = labels_from_kmer(strandless_kmer)
-        # keep track of the graph as it grows and make sure its always an even # of nodes
-        prev_size = len(self)
-        if self.has_node(l) is not True and self.has_node(r) is not True:
-            # should not be possible to have just left or just right
-            assert not (self.has_node(l) or self.has_node(r))
-            self.add_node(l)
-            self.add_node(r)
-            self.add_edge(l, r, positions=defaultdict(list))
-            self.edge[l][r]['positions'][name].append(pos)
-            assert prev_size + 2 == len(self)
-        else:
-            self.edge[l][r]['positions'][name].append(pos)
-            assert prev_size == len(self)
-        return strandless_kmer
+        kmer_canonical = canonical(kmer)
+        if kmer_canonical not in self.kmers:
+            l, r = labels_from_kmer(kmer_canonical)
+            # keep track of the graph as it grows and make sure its always an even # of nodes
+            prev_size = len(self)
+            if self.has_node(l) is not True and self.has_node(r) is not True:
+                # should not be possible to have just left or just right
+                assert not (self.has_node(l) or self.has_node(r))
+                self.add_node(l)
+                self.add_node(r)
+                self.add_edge(l, r, positions=defaultdict(list))
+                self.edge[l][r]['positions'][name].append(pos)
+                assert prev_size + 2 == len(self)
+            else:
+                self.edge[l][r]['positions'][name].append(pos)
+                assert prev_size == len(self)
+            self.kmers.add(kmer_canonical)
 
-    def _determine_orientation(self, prev, prev_strandless, kmer, kmer_strandless):
-        if prev == prev_strandless:
+    def _determine_orientation(self, prev, prev_canonical, kmer, kmer_canonical):
+        if prev == prev_canonical:
             # exiting right side of previous kmer
-            if kmer == kmer_strandless:
+            if kmer == kmer_canonical:
                 # entering left side of next kmer
                 l, r = prev + "_R", kmer + "_L"
             else:
@@ -82,7 +83,7 @@ class UnitigGraph(nx.Graph):
                 l, r = prev + "_R", reverse_complement(kmer) + "_R"
         else:
             # exiting left side of previous kmer
-            if kmer == kmer_strandless:
+            if kmer == kmer_canonical:
                 # entering left side of next kmer
                 l, r = reverse_complement(prev) + "_L", kmer + "_L"
             else:
@@ -90,20 +91,19 @@ class UnitigGraph(nx.Graph):
                 l, r = reverse_complement(prev) + "_L", reverse_complement(kmer) + "_R"
         return l, r
 
-    def _add_kmer(self, prev, prev_strandless, kmer, name, pos):
+    def _add_adjacency(self, prev_kmer, kmer):
         """
         Adds L/R nodes, sequence edge and adjacency edge to the graph
         """
-        kmer_strandless = self._build_nodes(kmer, name, pos)
+        prev_kmer_canonical = canonical(prev_kmer)
+        kmer_canonical = canonical(kmer)
         # make sure we aren't adding edges - they should already exist now
-        prev_size = len(self)
-        l, r = self._determine_orientation(prev, prev_strandless, kmer, kmer_strandless)
+        prev_kmer_size = len(self)
+        l, r = self._determine_orientation(prev_kmer, prev_kmer_canonical, kmer, kmer_canonical)
         self.add_edge(l, r)
         self.edge[l][r]['source'] = True
         # no new nodes should be created in this process
-        assert prev_size == len(self), (pos, prev, kmer)
-        self.kmers.add(kmer)
-        return kmer, kmer_strandless
+        assert prev_kmer_size == len(self), (prev_kmer, kmer)
 
     def _prune_source_edges(self):
         """
@@ -192,27 +192,30 @@ class UnitigGraph(nx.Graph):
         # just in case they aren't upper case
         masked_seq = masked_seq.upper()
         unmasked_seq = unmasked_seq.upper()
-        # edge case: there is a N in the first k bases
-        for start in xrange(len(masked_seq) - self.kmer_size + 1):
-            prev_kmer = masked_seq[start:start + self.kmer_size]
-            if "N" not in prev_kmer:
-                break
-        prev_kmer = masked_seq[start:start + self.kmer_size]
-        unmasked_kmer = unmasked_seq[start:start + self.kmer_size]
-        assert prev_kmer == unmasked_kmer
-        self._build_nodes(prev_kmer, name, start)
-        for i in xrange(start + 1, len(masked_seq) - self.kmer_size + 1):
+        prev_kmer = masked_seq[:self.kmer_size]
+        prev_pos = 0
+        for i in xrange(1, len(masked_seq) - self.kmer_size + 1):
             kmer = masked_seq[i:i + self.kmer_size]
-            print prev_kmer, kmer, unmasked_kmer, len(self)
             if "N" in prev_kmer:
+                self.masked_kmers.add(canonical(unmasked_seq[prev_pos:prev_pos + self.kmer_size]))
+                prev_kmer = kmer
+                prev_pos = i
                 continue
-            if "N" in kmer:
-                self.masked_kmers.add(strandless(unmasked_kmer))
+            elif "N" in kmer:
+                self.masked_kmers.add(canonical(unmasked_seq[i:i + self.kmer_size]))
                 continue
-            prev_strandless = strandless(prev_kmer)
-            prev_kmer, prev_strandless = self._add_kmer(prev_kmer, prev_strandless, kmer, name, i)
-            unmasked_kmer = unmasked_seq[i:i + self.kmer_size]
-            assert len(self.kmers & self.masked_kmers) == 0, self.kmers & self.masked_kmers
+            else:
+                prev_kmer = masked_seq[prev_pos:prev_pos + self.kmer_size]
+                assert "N" not in prev_kmer and "N" not in kmer
+                self._build_nodes(prev_kmer, prev_pos, name)
+                self._build_nodes(kmer, i, name)
+                self._add_adjacency(prev_kmer, kmer)
+                try:
+                    assert len(self.kmers & self.masked_kmers) == 0, (self.kmers & self.masked_kmers, prev_kmer, kmer, prev_pos, i, name)
+                except:
+                    a = 1
+                prev_kmer = kmer
+                prev_pos = i
 
     def add_individual_sequence(self, seq):
         """
@@ -220,11 +223,11 @@ class UnitigGraph(nx.Graph):
         """
         assert len(seq) == self.kmer_size + 1
         prev, kmer = seq[:-1], seq[1:]
-        strandless_prev = strandless(prev)
-        strandless_kmer = strandless(kmer)
-        if strandless_prev not in self.masked_kmers and strandless_kmer not in self.masked_kmers:
+        prev_canonical = canonical(prev)
+        kmer_canonical = canonical(kmer)
+        if prev_canonical not in self.masked_kmers and kmer_canonical not in self.masked_kmers:
             # add nodes if necessary
-            for k in [strandless_prev, strandless_kmer]:
+            for k in [prev_canonical, kmer_canonical]:
                 l, r = labels_from_kmer(k)
                 if self.has_node(l) is not True and self.has_node(r) is not True:
                     # should not be possible to have just left or just right
@@ -233,10 +236,10 @@ class UnitigGraph(nx.Graph):
                     self.add_node(r)
                     self.add_edge(l, r)
             # build adjacency edge
-            l, r = self._determine_orientation(prev, strandless_prev, kmer, strandless_kmer)
+            l, r = self._determine_orientation(prev, prev_canonical, kmer, kmer_canonical)
             self.add_edge(l, r)
-            self.kmers.update([strandless_prev, strandless_kmer])
-        assert len(self.kmers & self.masked_kmers) == 0, ('source', prev_kmer, prev_strandless, kmer, kmer_strandless)
+            self.kmers.update([prev_canonical, kmer_canonical])
+        assert len(self.kmers & self.masked_kmers) == 0, ('source', prev, prev_canonical, kmer, kmer_canonical)
 
     def prune_edges(self):
         self._prune_source_edges()

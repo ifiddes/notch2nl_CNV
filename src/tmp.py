@@ -1,5 +1,6 @@
 #fastq_path = "/cluster/home/ifiddes/ifiddes_hive/notch_mike_snyder/snyder_notch.50mer.Counts.fa"
-fastq_path = "/home/ifiddes/hive/notch_mike_snyder/snyder_notch.50mer.Counts.fa"
+#fastq_path = "/home/ifiddes/hive/notch_mike_snyder/snyder_notch.50mer.Counts.fa"
+fastq_path = "~/hive/notch_mike_snyder/snyder_notch.50mer.Counts.fa"
 masked_ref_path = "data/kmer_model_data/notch2nl_masked_hg38.fa"
 unmasked_ref_path = "data/kmer_model_data/notch2nl_unmasked_hg38.fa"
 from src.unitigGraph import *
@@ -67,7 +68,7 @@ subgraphs = sorted(subgraphs, key=lambda x: len(x))
 from src.unitigGraph import *
 from src.helperFunctions import *
 from src.kmerModel import *
-masked_seq = "NATGCACANNNGAAGAGAG"
+masked_seq = "NATGCACAANNAAGAGAG"
 unmasked_seq = "AATGCACAACGAAGAGAG"
 name = "A"
 offset = 0
@@ -88,3 +89,15 @@ masked_seq = unmasked_seq
 graph = UnitigGraph(49)
 graph.construct_ref_nodes(name, offset, masked_seq, unmasked_seq)
 graph.construct_adjacencies(masked_seq)
+
+
+from src.unitigGraph import *
+from src.helperFunctions import *
+from src.kmerModel import *
+masked_seq = "GCATTNTAAGACTNNGCTGTTATAA"
+unmasked_seq = "GCATTTTAAGACTGTGCTGTTATAA"
+name = "A"
+offset = 0
+graph = UnitigGraph(3)
+graph.add_source_sequence(name, offset, masked_seq, unmasked_seq)
+
