@@ -49,7 +49,7 @@ class UnitigGraph(nx.Graph):
             self.normalizing_kmers.add(s)
         self.has_normalizing = True
 
-    def _build_nodes(self, kmer, name, pos):
+    def _build_nodes(self, kmer, pos, name):
         """
         Takes a kmer, and adds it to the graph, constructing a sequence edge for the kmer.
         Returns the canonical representation of this kmer.
