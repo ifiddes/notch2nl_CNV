@@ -31,6 +31,8 @@ class UnitigGraph(nx.Graph):
         self.kmers = set()
         # masked kmers stores kmers that were repeat masked and should be ignored in individual data
         self.masked_kmers = set()
+        # these are edges that were pruned from the source graph and should NOT be re-introduced by the individual
+        self.bad_source_edges = set()
         self.normalizing_kmers = set()
         self.source_sequence_sizes = {}
 
@@ -69,7 +71,7 @@ class UnitigGraph(nx.Graph):
         else:
             self.edge[l][r]['positions'][name].append(pos)
             assert prev_size == len(self)
-            self.kmers.add(kmer_canonical)
+        self.kmers.add(kmer_canonical)
 
     def _determine_orientation(self, prev, prev_canonical, kmer, kmer_canonical):
         if prev == prev_canonical:
@@ -151,21 +153,22 @@ class UnitigGraph(nx.Graph):
         prev, kmer = seq[:-1], seq[1:]
         prev_canonical = canonical(prev)
         kmer_canonical = canonical(kmer)
-        if prev_canonical not in self.masked_kmers and kmer_canonical not in self.masked_kmers:
+        if prev_canonical in self.masked_kmers and kmer_canonical in self.masked_kmers:
             # do not add individual sequence that were originally masked in the kmer masking procedure
-            for k in [prev_canonical, kmer_canonical]:
-                l, r = labels_from_kmer(k)
-                if self.has_node(l) is not True and self.has_node(r) is not True:
-                    # should not be possible to have just left or just right
-                    assert not (self.has_node(l) or self.has_node(r))
-                    self.add_node(l)
-                    self.add_node(r)
-                    self.add_edge(l, r)
-            # build adjacency edge
             l, r = self._determine_orientation(prev, prev_canonical, kmer, kmer_canonical)
-            self.add_edge(l, r)
-            self.kmers.update([prev_canonical, kmer_canonical])
-            # assert len(self.kmers & self.masked_kmers) == 0, ('source', prev, prev_canonical, kmer, kmer_canonical)
+            if frozenset(sorted([l, r])) not in self.bad_source_edges:
+                for k in [prev_canonical, kmer_canonical]:
+                    a, b = labels_from_kmer(k)
+                    if self.has_node(a) is not True and self.has_node(b) is not True:
+                        # should not be possible to have just left or just right
+                        assert not (self.has_node(a) or self.has_node(b))
+                        self.add_node(a)
+                        self.add_node(b)
+                        # add sequence edge without any tags
+                        self.add_edge(a, b)
+                # build adjacency edge
+                self.add_edge(l, r)
+                self.kmers.update([prev_canonical, kmer_canonical])
 
     def prune_source_edges(self):
         """
@@ -174,7 +177,6 @@ class UnitigGraph(nx.Graph):
         1) connect two sequence edges that have different source sequences
         2) connect two sequence edges that have different counts (e.g. was in A twice then A once)
         """
-        to_remove = []
         for a, b in self.edges_iter():
             if a == b:
                 # ignore self loop edges
@@ -187,8 +189,8 @@ class UnitigGraph(nx.Graph):
                 a_seqs = [para * len(positions) for para, positions in self.edge[a_l][a_r]['positions'].iteritems()]
                 b_seqs = [para * len(positions) for para, positions in self.edge[b_l][b_r]['positions'].iteritems()]
                 if sorted(a_seqs) != sorted(b_seqs):
-                    to_remove.append([a, b])
-        for a, b in to_remove:
+                    self.bad_source_edges.add(frozenset(sorted([a, b])))
+        for a, b in self.bad_source_edges:
             self.remove_edge(a, b)
 
     def prune_individual_edges(self):
@@ -269,7 +271,7 @@ class UnitigGraph(nx.Graph):
                     self.edge[l][r]['fontsize'] = 8
                     # make a fancy label for this sequence edge if its from a source sequence
                     if 'positions' in self.edge[l][r]:
-                        self.edge[l][r]["label"] = " - ".join(sorted(
+                        self.edge[l][r]["label"] = "\\n".join(sorted(
                             [": ".join([y, ", ".join([str(x) for x in self.edge[l][r]['positions'][y]])]) for y in
                              self.edge[l][r]['positions']]))
                     self.edge[l][r]["color"] = "purple"
