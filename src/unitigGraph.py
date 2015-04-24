@@ -122,7 +122,7 @@ class UnitigGraph(nx.Graph):
         for i in xrange(1, len(masked_seq) - self.kmer_size + 1):
             kmer = masked_seq[i:i + self.kmer_size]
             kmer_unmasked = unmasked_seq[i:i + self.kmer_size]
-            assert len(self.masked_kmers & self.kmers) == 0, (i, kmer, prev_pos, prev_kmer)
+            #assert len(self.masked_kmers & self.kmers) == 0, (i, kmer, prev_pos, prev_kmer)
             if canonical(prev_kmer_unmasked) in self.masked_kmers:
                 prev_kmer = kmer
                 prev_kmer_unmasked = kmer_unmasked
@@ -141,6 +141,7 @@ class UnitigGraph(nx.Graph):
                 prev_kmer = kmer
                 prev_kmer_unmasked = kmer_unmasked
                 prev_pos = i
+        assert len(self.masked_kmers & self.kmers) == 0
 
     def add_individual_sequence(self, seq):
         """
@@ -214,7 +215,7 @@ class UnitigGraph(nx.Graph):
                 continue
             elif len(source_sequences) == 0:
                 # this subgraph has no anchors - can't know which paralog, if any, this came from. Remove this subgraph.
-                nodes_to_remove.extend(subgraph.nodes())
+                nodes_to_remove.update(subgraph.nodes())
                 continue
             # this subgraph needs to be resolved. Find the common source paralogs
             common_paralogs = frozenset.intersection(*source_sequences)
@@ -223,7 +224,7 @@ class UnitigGraph(nx.Graph):
                 for n in subgraph.nodes_iter():
                     a, b = labels_from_node(n)
                     if 'positions' not in subgraph.edge[a][b]:
-                        nodes_to_remove.add(frozenset(sorted([a, b])))
+                        nodes_to_remove.update([a, b])
             # remove any individual edge attached to a node whose source sequence is not common_paralogs
             else:
                 for n in subgraph.nodes_iter():
@@ -248,7 +249,7 @@ class UnitigGraph(nx.Graph):
         for new_subgraph in nx.connected_component_subgraphs(self):
             source_sequences = {tuple(new_subgraph.edge[a][b]['positions'].keys()) for a, b in
                                 new_subgraph.edges_iter() if 'positions' in new_subgraph.edge[a][b]}
-            assert len(source_sequences) == 1, (source_sequences, new_subgraph.edge[a][b]['positions'])
+            assert len(source_sequences) == 1, (source_sequences, len(new_subgraph))
 
     def finish_build(self, graphviz=False):
         """
