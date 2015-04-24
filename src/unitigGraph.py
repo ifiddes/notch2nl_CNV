@@ -223,7 +223,7 @@ class UnitigGraph(nx.Graph):
                 for n in subgraph.nodes_iter():
                     a, b = labels_from_node(n)
                     if 'positions' not in subgraph.edge[a][b]:
-                        nodes_to_remove.extend([a, b])
+                        nodes_to_remove.add(frozenset(sorted([a, b])))
             # remove any individual edge attached to a node whose source sequence is not common_paralogs
             else:
                 for n in subgraph.nodes_iter():
