@@ -1,4 +1,5 @@
 from itertools import izip
+import cPickle as pickle
 from src.kmerIlpModel import KmerIlpModel
 from src.unitigGraph import UnitigGraph
 from src.helperFunctions import count_reader, canonical
@@ -15,11 +16,17 @@ class KmerModel(Target):
 
     def run(self):
         paths = self.paths
-        graph = UnitigGraph(paths.kmer_size)
-        graph.add_normalizing(paths.normalizing)
-        add_mole_to_graph(graph, paths.mole_seq)
+
+        if os.path.exists(paths.pickled_graph):
+            graph = pickle.load(open(paths.pickled_graph))
+        else:
+            graph = UnitigGraph(paths.kmer_size)
+            add_mole_to_graph(graph, paths.mole_seq)
+            graph.prune_source_edges()
+        if len(graph.normalizing_kmers) == 0:
+            graph.add_normalizing(paths.normalizing)
         add_individual_to_graph(graph, paths.k1mer_counts)
-        graph.prune_edges()
+        graph.prune_individual_edges()
 
 
 def add_individual_to_graph(graph, k1mer_counts):

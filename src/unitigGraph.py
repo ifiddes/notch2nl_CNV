@@ -105,86 +105,6 @@ class UnitigGraph(nx.Graph):
         # no new nodes should be created in this process
         assert prev_kmer_size == len(self), (prev_kmer, kmer)
 
-    def _prune_source_edges(self):
-        """
-        Prunes the source edges to create unitigs. This is defined as contiguous blocks of sequence that are the same
-        in one or more paralogs. Thus, we remove all source adjacency edges that:
-        1) connect two sequence edges that have different source sequences
-        2) connect two sequence edges that have different counts (e.g. was in A twice then A once)
-        """
-        to_remove = []
-        for a, b in self.edges_iter():
-            if a == b:
-                # ignore self loop edges
-                continue
-            if 'source' in self.edge[a][b]:
-                # this is a source sequence adjacency edge
-                # find the sequence edges this edge connect and check source sequences
-                a_l, a_r = labels_from_node(a)
-                b_l, b_r = labels_from_node(b)
-                a_seqs = [para * len(positions) for para, positions in self.edge[a_l][a_r]['positions'].iteritems()]
-                b_seqs = [para * len(positions) for para, positions in self.edge[b_l][b_r]['positions'].iteritems()]
-                if sorted(a_seqs) != sorted(b_seqs):
-                    to_remove.append([a, b])
-        for a, b in to_remove:
-            self.remove_edge(a, b)
-
-    def _prune_individual_edges(self):
-        """
-        For each remaining subgraph, determine if it is a unitig or if read data are joining unitigs.
-        If no unitig information is present in this subgraph, remove it - we can't know which paralog(s), if any,
-        these sequences came from. Otherwise, look for bubble nodes and remove the edge connecting the unitigs such that
-        the unitig with the most common source sequences keeps the bubble. If it is a tie, discard these kmers.
-        e.g. {A,B,C} - {A,B} -> {A,B}
-             {A,B} - {A} -> {A}
-             {A,B} - {A,C} -> {A}
-             {A} - {C} -> discard
-        """
-        nodes_to_remove = []
-        edges_to_remove = []
-        for subgraph in nx.connected_component_subgraphs(self):
-            source_sequences = {tuple(subgraph.edge[a][b]['positions'].iterkeys()) for a, b in subgraph.edges_iter() if
-                                'positions' in subgraph.edge[a][b]}
-            if len(source_sequences) == 1:
-                # no bubbles to resolve here
-                continue
-            elif len(source_sequences) == 0:
-                # this subgraph has no anchors - can't know which paralog, if any, this came from. Remove this subgraph.
-                nodes_to_remove.extend(subgraph.nodes())
-                continue
-            # determine if this subgraph has a cycle - we know that this should be a tree, so if any node has
-            # degree greater than 2 there is a cycle coming off of it. We ignore self loops (as long as they are
-            # source)
-            self_loop_nodes = [a for a, b in subgraph.selfloop_edges() if 'source' in subgraph.edge[a][b]]
-            bubble_nodes = [n for n in subgraph.nodes_iter() if subgraph.degree(n) > 2 and n not in self_loop_nodes]
-            # we count the number of source sequences each bubble node is attached to
-            largest = max(len(x) for x in source_sequences)
-            for n in bubble_nodes:
-                l, r = labels_from_node(n)
-                if 'positions' not in self.edge[l][r]:
-                    # ignore individual edges
-                    continue
-                if len(self.edge[l][r]['positions'].values()) == largest:
-                    for a, b in self.edges(n):
-                        if a == b:
-                            # edge case: is this edge a self loop?
-                            continue
-                        elif remove_label(a) == remove_label(b):
-                            # never remove sequence edges
-                            continue
-                        elif 'source' in self.edge[a][b]:
-                            continue
-                        edges_to_remove.append([a, b])
-            """# this subgraph should now contain at least 2 unitigs - verify that this is true
-            for new_subgraph in subgraph.connected_component_iter(internal=True):
-                source_sequences = {tuple(new_subgraph.edge[a][b]['positions'].keys()) for a, b in
-                                    new_subgraph.edges_iter() if 'positions' in new_subgraph.edge[a][b]}
-                assert len(source_sequences) == 1, source_sequences"""
-        for a, b in edges_to_remove:
-            self.remove_edge(a, b)
-        for n in nodes_to_remove:
-            self.remove_node(n)
-
     def add_masked_kmers(self, masked_seq, unmasked_seq):
         for i in xrange(len(masked_seq) - self.kmer_size + 1):
             if "N" in masked_seq[i:i + self.kmer_size]:
@@ -244,9 +164,85 @@ class UnitigGraph(nx.Graph):
             self.kmers.update([prev_canonical, kmer_canonical])
         assert len(self.kmers & self.masked_kmers) == 0, ('source', prev, prev_canonical, kmer, kmer_canonical)
 
-    def prune_edges(self):
-        self._prune_source_edges()
-        self._prune_individual_edges()
+    def prune_source_edges(self):
+        """
+        Prunes the source edges to create unitigs. This is defined as contiguous blocks of sequence that are the same
+        in one or more paralogs. Thus, we remove all source adjacency edges that:
+        1) connect two sequence edges that have different source sequences
+        2) connect two sequence edges that have different counts (e.g. was in A twice then A once)
+        """
+        to_remove = []
+        for a, b in self.edges_iter():
+            if a == b:
+                # ignore self loop edges
+                continue
+            if 'source' in self.edge[a][b]:
+                # this is a source sequence adjacency edge
+                # find the sequence edges this edge connect and check source sequences
+                a_l, a_r = labels_from_node(a)
+                b_l, b_r = labels_from_node(b)
+                a_seqs = [para * len(positions) for para, positions in self.edge[a_l][a_r]['positions'].iteritems()]
+                b_seqs = [para * len(positions) for para, positions in self.edge[b_l][b_r]['positions'].iteritems()]
+                if sorted(a_seqs) != sorted(b_seqs):
+                    to_remove.append([a, b])
+        for a, b in to_remove:
+            self.remove_edge(a, b)
+
+    def prune_individual_edges(self):
+        """
+        For each remaining subgraph, determine if it is a unitig or if read data are joining unitigs.
+        If no unitig information is present in this subgraph, remove it - we can't know which paralog(s), if any,
+        these sequences came from. Otherwise, look for bubble nodes and remove the edge connecting the unitigs such that
+        the unitig with the most common source sequences keeps the bubble. If it is a tie, discard these kmers.
+        e.g. {A,B,C} - {A,B} -> {A,B}
+             {A,B} - {A} -> {A}
+             {A,B} - {A,C} -> {A}
+             {A} - {C} -> discard
+        """
+        nodes_to_remove = []
+        edges_to_remove = []
+        for subgraph in nx.connected_component_subgraphs(self):
+            source_sequences = {tuple(subgraph.edge[a][b]['positions'].iterkeys()) for a, b in subgraph.edges_iter() if
+                                'positions' in subgraph.edge[a][b]}
+            if len(source_sequences) == 1:
+                # no bubbles to resolve here
+                continue
+            elif len(source_sequences) == 0:
+                # this subgraph has no anchors - can't know which paralog, if any, this came from. Remove this subgraph.
+                nodes_to_remove.extend(subgraph.nodes())
+                continue
+            # determine if this subgraph has a cycle - we know that this should be a tree, so if any node has
+            # degree greater than 2 there is a cycle coming off of it. We ignore self loops (as long as they are
+            # source)
+            self_loop_nodes = [a for a, b in subgraph.selfloop_edges() if 'source' in subgraph.edge[a][b]]
+            bubble_nodes = [n for n in subgraph.nodes_iter() if subgraph.degree(n) > 2 and n not in self_loop_nodes]
+            # we count the number of source sequences each bubble node is attached to
+            largest = max(len(x) for x in source_sequences)
+            for n in bubble_nodes:
+                l, r = labels_from_node(n)
+                if 'positions' not in self.edge[l][r]:
+                    # ignore individual edges
+                    continue
+                if len(self.edge[l][r]['positions'].values()) == largest:
+                    for a, b in self.edges(n):
+                        if a == b:
+                            # edge case: is this edge a self loop?
+                            continue
+                        elif remove_label(a) == remove_label(b):
+                            # never remove sequence edges
+                            continue
+                        elif 'source' in self.edge[a][b]:
+                            continue
+                        edges_to_remove.append([a, b])
+            """# this subgraph should now contain at least 2 unitigs - verify that this is true
+            for new_subgraph in subgraph.connected_component_iter(internal=True):
+                source_sequences = {tuple(new_subgraph.edge[a][b]['positions'].keys()) for a, b in
+                                    new_subgraph.edges_iter() if 'positions' in new_subgraph.edge[a][b]}
+                assert len(source_sequences) == 1, source_sequences"""
+        for a, b in edges_to_remove:
+            self.remove_edge(a, b)
+        for n in nodes_to_remove:
+            self.remove_node(n)
 
     def finish_build(self, graphviz=False):
         """
