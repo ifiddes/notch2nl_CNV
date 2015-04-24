@@ -49,27 +49,26 @@ class UnitigGraph(nx.Graph):
             self.normalizing_kmers.add(s)
         self.has_normalizing = True
 
-    def _build_nodes(self, kmer, pos, name):
+    def _build_source_nodes(self, kmer, pos, name):
         """
         Takes a kmer, and adds it to the graph, constructing a sequence edge for the kmer.
         Returns the canonical representation of this kmer.
         """
         kmer_canonical = canonical(kmer)
-        if kmer_canonical not in self.kmers:
-            l, r = labels_from_kmer(kmer_canonical)
-            # keep track of the graph as it grows and make sure its always an even # of nodes
-            prev_size = len(self)
-            if self.has_node(l) is not True and self.has_node(r) is not True:
-                # should not be possible to have just left or just right
-                assert not (self.has_node(l) or self.has_node(r))
-                self.add_node(l)
-                self.add_node(r)
-                self.add_edge(l, r, positions=defaultdict(list))
-                self.edge[l][r]['positions'][name].append(pos)
-                assert prev_size + 2 == len(self)
-            else:
-                self.edge[l][r]['positions'][name].append(pos)
-                assert prev_size == len(self)
+        l, r = labels_from_kmer(kmer_canonical)
+        # keep track of the graph as it grows and make sure its always an even # of nodes
+        prev_size = len(self)
+        if self.has_node(l) is not True and self.has_node(r) is not True:
+            # should not be possible to have just left or just right
+            assert not (self.has_node(l) or self.has_node(r))
+            self.add_node(l)
+            self.add_node(r)
+            self.add_edge(l, r, positions=defaultdict(list))
+            self.edge[l][r]['positions'][name].append(pos)
+            assert prev_size + 2 == len(self)
+        else:
+            self.edge[l][r]['positions'][name].append(pos)
+            assert prev_size == len(self)
             self.kmers.add(kmer_canonical)
 
     def _determine_orientation(self, prev, prev_canonical, kmer, kmer_canonical):
@@ -91,7 +90,7 @@ class UnitigGraph(nx.Graph):
                 l, r = reverse_complement(prev) + "_L", reverse_complement(kmer) + "_R"
         return l, r
 
-    def _add_adjacency(self, prev_kmer, kmer):
+    def _add_source_adjacency(self, prev_kmer, kmer):
         """
         Adds L/R nodes, sequence edge and adjacency edge to the graph
         """
@@ -119,6 +118,7 @@ class UnitigGraph(nx.Graph):
         prev_kmer = masked_seq[:self.kmer_size]
         prev_kmer_unmasked = unmasked_seq[:self.kmer_size]
         prev_pos = 0
+        start_flag = False
         for i in xrange(1, len(masked_seq) - self.kmer_size + 1):
             kmer = masked_seq[i:i + self.kmer_size]
             kmer_unmasked = unmasked_seq[i:i + self.kmer_size]
@@ -131,11 +131,13 @@ class UnitigGraph(nx.Graph):
             elif canonical(kmer_unmasked) in self.masked_kmers:
                 continue
             else:
+                if start_flag is False:
+                    self._build_source_nodes(prev_kmer, prev_pos, name)
+                    start_flag = True
                 prev_kmer = masked_seq[prev_pos:prev_pos + self.kmer_size]
                 assert "N" not in prev_kmer and "N" not in kmer, (prev_pos, prev_kmer, i, kmer)
-                self._build_nodes(prev_kmer, prev_pos, name)
-                self._build_nodes(kmer, i, name)
-                self._add_adjacency(prev_kmer, kmer)
+                self._build_source_nodes(kmer, i, name)
+                self._add_source_adjacency(prev_kmer, kmer)
                 prev_kmer = kmer
                 prev_kmer_unmasked = kmer_unmasked
                 prev_pos = i
@@ -149,7 +151,7 @@ class UnitigGraph(nx.Graph):
         prev_canonical = canonical(prev)
         kmer_canonical = canonical(kmer)
         if prev_canonical not in self.masked_kmers and kmer_canonical not in self.masked_kmers:
-            # add nodes if necessary
+            # do not add individual sequence that were originally masked in the kmer masking procedure
             for k in [prev_canonical, kmer_canonical]:
                 l, r = labels_from_kmer(k)
                 if self.has_node(l) is not True and self.has_node(r) is not True:
@@ -162,7 +164,7 @@ class UnitigGraph(nx.Graph):
             l, r = self._determine_orientation(prev, prev_canonical, kmer, kmer_canonical)
             self.add_edge(l, r)
             self.kmers.update([prev_canonical, kmer_canonical])
-        assert len(self.kmers & self.masked_kmers) == 0, ('source', prev, prev_canonical, kmer, kmer_canonical)
+            # assert len(self.kmers & self.masked_kmers) == 0, ('source', prev, prev_canonical, kmer, kmer_canonical)
 
     def prune_source_edges(self):
         """
@@ -197,13 +199,16 @@ class UnitigGraph(nx.Graph):
         e.g. {A,B,C} - {A,B} -> {A,B}
              {A,B} - {A} -> {A}
              {A,B} - {A,C} -> {A}
+             {A,A - {A} -> {A}
              {A} - {C} -> discard
         """
-        nodes_to_remove = []
-        edges_to_remove = []
+        nodes_to_remove = set()
+        edges_to_remove = set()
         for subgraph in nx.connected_component_subgraphs(self):
-            source_sequences = {tuple(subgraph.edge[a][b]['positions'].iterkeys()) for a, b in subgraph.edges_iter() if
-                                'positions' in subgraph.edge[a][b]}
+            source_sequences = set()
+            for a, b in subgraph.edges_iter():
+                if 'positions' in subgraph.edge[a][b]:
+                    source_sequences.add(frozenset(self.edge[a][b]['positions'].iterkeys()))
             if len(source_sequences) == 1:
                 # no bubbles to resolve here
                 continue
@@ -211,38 +216,39 @@ class UnitigGraph(nx.Graph):
                 # this subgraph has no anchors - can't know which paralog, if any, this came from. Remove this subgraph.
                 nodes_to_remove.extend(subgraph.nodes())
                 continue
-            # determine if this subgraph has a cycle - we know that this should be a tree, so if any node has
-            # degree greater than 2 there is a cycle coming off of it. We ignore self loops (as long as they are
-            # source)
-            self_loop_nodes = [a for a, b in subgraph.selfloop_edges() if 'source' in subgraph.edge[a][b]]
-            bubble_nodes = [n for n in subgraph.nodes_iter() if subgraph.degree(n) > 2 and n not in self_loop_nodes]
-            # we count the number of source sequences each bubble node is attached to
-            largest = max(len(x) for x in source_sequences)
-            for n in bubble_nodes:
-                l, r = labels_from_node(n)
-                if 'positions' not in self.edge[l][r]:
-                    # ignore individual edges
-                    continue
-                if len(self.edge[l][r]['positions'].values()) == largest:
-                    for a, b in self.edges(n):
-                        if a == b:
-                            # edge case: is this edge a self loop?
-                            continue
-                        elif remove_label(a) == remove_label(b):
-                            # never remove sequence edges
-                            continue
-                        elif 'source' in self.edge[a][b]:
-                            continue
-                        edges_to_remove.append([a, b])
-            """# this subgraph should now contain at least 2 unitigs - verify that this is true
-            for new_subgraph in subgraph.connected_component_iter(internal=True):
-                source_sequences = {tuple(new_subgraph.edge[a][b]['positions'].keys()) for a, b in
-                                    new_subgraph.edges_iter() if 'positions' in new_subgraph.edge[a][b]}
-                assert len(source_sequences) == 1, source_sequences"""
+            # this subgraph needs to be resolved. Find the common source paralogs
+            common_paralogs = frozenset.intersection(*source_sequences)
+            # if there are no common paralogs, remove all individual sequence
+            if len(common_paralogs) == 0:
+                for n in subgraph.nodes_iter():
+                    a, b = labels_from_node(n)
+                    if 'positions' not in subgraph.edge[a][b]:
+                        nodes_to_remove.extend([a, b])
+            # remove any individual edge attached to a node whose source sequence is not common_paralogs
+            else:
+                for n in subgraph.nodes_iter():
+                    l, r = labels_from_node(n)
+                    if 'positions' in self.edge[l][r]:
+                        these_paralogs = frozenset(self.edge[l][r]['positions'].iterkeys())
+                        if these_paralogs != common_paralogs:
+                            for next_node in subgraph.adj[n]:
+                                if 'source' in subgraph.edge[n][next_node]:
+                                    continue
+                                elif remove_label(n) == remove_label(next_node):
+                                    continue
+                                edges_to_remove.add(frozenset(sorted([n, next_node])))
         for a, b in edges_to_remove:
             self.remove_edge(a, b)
         for n in nodes_to_remove:
             self.remove_node(n)
+            k = remove_label(n)
+            if k in self.kmers:
+                self.kmers.remove(k)
+        # debugging: make sure this worked
+        for new_subgraph in nx.connected_component_subgraphs(self):
+            source_sequences = {tuple(new_subgraph.edge[a][b]['positions'].keys()) for a, b in
+                                new_subgraph.edges_iter() if 'positions' in new_subgraph.edge[a][b]}
+            assert len(source_sequences) == 1, (source_sequences, new_subgraph.edge[a][b]['positions'])
 
     def finish_build(self, graphviz=False):
         """

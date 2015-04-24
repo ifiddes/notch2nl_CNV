@@ -13,16 +13,15 @@ class PrepareData(Target):
         self.paths = paths
 
     def run(self):
-        # no need to do self. every damn time
         paths = self.paths
         if not os.path.exists(paths.fastq):
             download_query(paths.fastq, paths.out_dir, paths.cghub_key, paths.query_string, paths.uuid)
         if not os.path.exists(paths.bam):
             Target.addChildTargetFn(align_query, args=(paths.fastq, paths.bam, paths.out_dir, paths.uuid,
                                                        paths.aln_index))
-        if not os.path.exists(paths.jf_counts):
-            Target.addChildTargetFn(run_jellyfish, args=(paths.out_dir, paths.jf_counts, paths.fastq, paths.uuid,
-                                                         paths.kmer_size))
+        if not os.path.exists(paths.jf_counts) or not os.path.exist(paths.jf_kplus1_counts):
+            Target.addChildTargetFn(run_jellyfish, args=(paths.out_dir, paths.jf_counts, paths.jf_kplus1_counts,
+                                                         paths.fastq, paths.uuid, paths.kmer_size))
         Target.setFollowOnTarget(SunModel(paths))
 
 
@@ -30,21 +29,25 @@ def download_query(fastq, out_dir, cghub_key, query_string, uuid):
     """
     Downloads data from CGHub BAM Slicer
     """
-    system("""curl --silent "{}" -u "{}" | samtools bamshuf -Ou - {} | samtools bam2fq - > {}""".format(query_string, "haussler:" + cghub_key, os.path.join(out_dir, "tmp"), fastq))
+    system("""curl --silent "{}" -u "{}" | samtools bamshuf -Ou - {} | samtools bam2fq - > {}""".format(
+           query_string, "haussler:" + cghub_key, os.path.join(out_dir, "tmp"), fastq))
     if os.path.getsize(fastq) < 513:
         raise RuntimeError("curl did not download a BAM for {}. exiting.".format(uuid))
     os.remove(os.path.join(out_dir, "tmp"))
 
 
-def run_jellyfish(target, out_dir, jf_counts, fastq, uuid, kmer_size):
+def run_jellyfish(target, out_dir, jf_counts, jf_kplus1_counts, fastq, uuid, kmer_size):
     """
-    Runs jellyfish. -C flag is set to count both strands together.
+    Runs jellyfish twice: the first time counts kmers with -C at kmer_size kmers. This is the raw data for the ILP
+    model. Runs jellyfish a second time, with kmer_size +1. This will be used to add individual nodes
+    to the graph.
     """
     jf_file = os.path.join(out_dir, uuid + ".jf")
-    system("jellyfish count -C -m {} --bf-size 3G -s 300M -o {} {}".format(kmer_size, jf_file, fastq))
+    system("jellyfish count -C -m {} --bf-size 1G -s 200M -o {} {}".format(kmer_size, jf_file, fastq))
     system("jellyfish dump {} > {}".format(jf_file, jf_counts))
+    system("jellyfish count -C -m {} --bf-size 1G -s 200M -o {} {}".format(kmer_size + 1, jf_file, fastq))
+    system("jellyfish dump {} > {}".format(jf_file, jf_kplus1_counts))
     os.remove(jf_file)
-
 
 def align_query(target, fastq, bam, out_dir, uuid, index):
     """

@@ -18,6 +18,15 @@ graph.prune_source_edges()
 graph.prune_individual_edges()
 graph.finish_build(graphviz=True)
 #pickle.dump(graph, open("pruned_graph.pickle", "w"))
+
+import cPickle as pickle
+from src.unitigGraph import *
+from src.helperFunctions import *
+from src.kmerModel import *
+graph = pickle.load(open("data/kmer_model_data/mole_graph_pruned.pickle"))
+fastq_path = "/hive/users/ifiddes/notch_mike_snyder/snyder_notch.50mer.Counts.fa"
+add_individual_to_graph(graph, fastq_path)
+
 """
 combos = set()
 for subgraph in graph.connected_component_iter(internal=True):
@@ -103,6 +112,7 @@ unmasked_seq = "GCATTTTAAGACTGTGCTGTTATAA"
 name = "A"
 offset = 0
 graph = UnitigGraph(5)
+graph.add_masked_kmers(masked_seq, unmasked_seq)
 graph.add_source_sequence(name, offset, masked_seq, unmasked_seq)
 
 
@@ -112,18 +122,32 @@ from src.unitigGraph import *
 from src.helperFunctions import *
 from src.kmerModel import *
 import cPickle as pickle
-fastq_path = "~/hive/notch_mike_snyder/snyder_notch.50mer.Counts.fa"
-masked_ref_path = "data/kmer_model_data/notch2nl_masked_hg38.fa"
-unmasked_ref_path = "data/kmer_model_data/notch2nl_unmasked_hg38.fa"
-graph = UnitigGraph(7)
+fastq_path = "/home/ifiddes/hive/notch_mike_snyder/snyder_notch.50mer.Counts.fa"
+masked_ref_path = "data/kmer_model_data/masked_last_2500bp.fa"
+unmasked_ref_path = "data/kmer_model_data/unmasked_last_2500bp.fa"
+graph = UnitigGraph(49)
 add_mole_to_graph(graph, unmasked_ref_path, masked_ref_path)
-pickle.dump(graph.masked_kmers, open("masked.pickle", "w"))
+graph.prune_source_edges()
+add_individual_to_graph(graph, fastq_path)
+graph.prune_individual_edges()
 
 
 from src.kmerModel import *
 import cPickle as pickle
-graph = UnitigGraph(7)
-b_unmasked = "GACCACGAAGAGAT"
-b_masked = "TAAACAGATGAGAATGGAGGGG"
-graph.masked_kmers = pickle.load(open("masked.pickle"))
-graph.add_source_sequence("B", 0, b_masked, b_unmasked)
+import networkx as nx
+from jobTree.src.bioio import system
+graph = UnitigGraph(5)
+add_mole_to_graph(graph, "test_ref_short.fa", "test_ref_short.fa")
+graph.finish_build(graphviz=True)
+nx.write_dot(graph, "unpruned_test.dot")
+graph.prune_source_edges()
+nx.write_dot(graph, "pruned_test.dot")
+system("dot -Tpdf pruned_test.dot > pruned_test.pdf")
+system("dot -Tpdf unpruned_test.dot > unpruned_test.pdf")
+add_individual_to_graph(graph, "test_counts_short.fa")
+graph.finish_build(graphviz=True)
+nx.write_dot(graph, "with_individual.dot")
+system("dot -Tpdf with_individual.dot > with_individual.pdf")
+graph.prune_individual_edges()
+nx.write_dot(graph, "with_individual_pruned.dot")
+system("dot -Tpdf with_individual_pruned.dot > with_individual_pruned.pdf")
