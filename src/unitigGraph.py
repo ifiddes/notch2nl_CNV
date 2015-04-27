@@ -148,7 +148,7 @@ class UnitigGraph(nx.Graph):
         prev, kmer = seq[:-1], seq[1:]
         prev_canonical = canonical(prev)
         kmer_canonical = canonical(kmer)
-        if prev_canonical in self.masked_kmers and kmer_canonical in self.masked_kmers:
+        if prev_canonical not in self.masked_kmers and kmer_canonical not in self.masked_kmers:
             # do not add individual sequence that were originally masked in the kmer masking procedure
             l, r = self._determine_orientation(prev, prev_canonical, kmer, kmer_canonical)
             if frozenset(sorted([l, r])) not in self.bad_source_edges:
