@@ -243,10 +243,13 @@ class UnitigGraph(nx.Graph):
             if k in self.kmers:
                 self.kmers.remove(k)
         # debugging: make sure this worked
-        for new_subgraph in self.connected_component_iter():
-            source_sequences = {tuple(new_subgraph.edge[a][b]['positions'].keys()) for a, b in
-                                new_subgraph.edges_iter() if 'positions' in new_subgraph.edge[a][b]}
-            assert len(source_sequences) == 1, (source_sequences, len(new_subgraph))
+        try:
+            for new_subgraph in self.connected_component_iter():
+                source_sequences = {tuple(new_subgraph.edge[a][b]['positions'].keys()) for a, b in
+                                    new_subgraph.edges_iter() if 'positions' in new_subgraph.edge[a][b]}
+                assert len(source_sequences) == 1, (source_sequences, len(new_subgraph))
+        except AssertionError:
+            return new_subgraph
 
     def make_graphviz_labels(self):
         """
