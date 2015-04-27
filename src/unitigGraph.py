@@ -277,7 +277,7 @@ class UnitigGraph(nx.Graph):
         """
         Yields connected components.
         """
-        for subgraph in self.connected_component_iter():
+        for subgraph in nx.connected_component_subgraphs(self):
             yield subgraph
 
     def flag_nodes(self, kmer_iter):
