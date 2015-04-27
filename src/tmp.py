@@ -122,7 +122,7 @@ from src.unitigGraph import *
 from src.helperFunctions import *
 from src.kmerModel import *
 import cPickle as pickle
-fastq_path = "/home/ifiddes/hive/notch_mike_snyder/snyder_notch.50mer.Counts.fa"
+fastq_path = "/hive/users/ifiddes/notch_mike_snyder/snyder_notch.50mer.Counts.fa"
 masked_ref_path = "data/kmer_model_data/notch2nl_masked_hg38.fa"
 unmasked_ref_path = "data/kmer_model_data/notch2nl_unmasked_hg38.fa"
 graph = UnitigGraph(49)

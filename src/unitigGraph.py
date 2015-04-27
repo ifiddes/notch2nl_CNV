@@ -1,6 +1,6 @@
 import networkx as nx
 from collections import defaultdict
-from src.helperFunctions import remove_label, labels_from_kmer, labels_from_node, labeled_kmer_iter, canonical
+from src.helperFunctions import remove_label, labels_from_kmer, labels_from_node, canonical
 from jobTree.src.bioio import reverseComplement as reverse_complement
 
 
@@ -23,10 +23,6 @@ class UnitigGraph(nx.Graph):
     def __init__(self, kmer_size=49):
         nx.Graph.__init__(self)
         self.kmer_size = kmer_size
-        self.has_sequences = False
-        self.has_normalizing = False
-        self.is_pruned = False
-        self.is_built = False
         self.paralogs = []
         self.kmers = set()
         # masked kmers stores kmers that were repeat masked and should be ignored in individual data
@@ -49,7 +45,6 @@ class UnitigGraph(nx.Graph):
             if "N" in s:
                 continue
             self.normalizing_kmers.add(s)
-        self.has_normalizing = True
 
     def _build_source_nodes(self, kmer, pos, name):
         """
@@ -116,6 +111,7 @@ class UnitigGraph(nx.Graph):
         masked_seq should be the same length as unmasked_seq and represent the repeat masked version.
         """
         self.paralogs.append([name, offset])
+        self.paralogs = sorted(self.paralogs, key = lambda x: x[0])
         self.source_sequence_sizes[name] = len(masked_seq)
         prev_kmer = masked_seq[:self.kmer_size]
         prev_kmer_unmasked = unmasked_seq[:self.kmer_size]
@@ -124,7 +120,6 @@ class UnitigGraph(nx.Graph):
         for i in xrange(1, len(masked_seq) - self.kmer_size + 1):
             kmer = masked_seq[i:i + self.kmer_size]
             kmer_unmasked = unmasked_seq[i:i + self.kmer_size]
-            #assert len(self.masked_kmers & self.kmers) == 0, (i, kmer, prev_pos, prev_kmer)
             if canonical(prev_kmer_unmasked) in self.masked_kmers:
                 prev_kmer = kmer
                 prev_kmer_unmasked = kmer_unmasked
@@ -207,7 +202,7 @@ class UnitigGraph(nx.Graph):
         """
         nodes_to_remove = set()
         edges_to_remove = set()
-        for subgraph in nx.connected_component_subgraphs(self):
+        for subgraph in self.connected_component_iter():
             source_sequences = set()
             for a, b in subgraph.edges_iter():
                 if 'positions' in subgraph.edge[a][b]:
@@ -248,47 +243,41 @@ class UnitigGraph(nx.Graph):
             if k in self.kmers:
                 self.kmers.remove(k)
         # debugging: make sure this worked
-        for new_subgraph in nx.connected_component_subgraphs(self):
+        for new_subgraph in self.connected_component_iter():
             source_sequences = {tuple(new_subgraph.edge[a][b]['positions'].keys()) for a, b in
                                 new_subgraph.edges_iter() if 'positions' in new_subgraph.edge[a][b]}
             assert len(source_sequences) == 1, (source_sequences, len(new_subgraph))
 
-    def finish_build(self, graphviz=False):
+    def make_graphviz_labels(self):
         """
-        Finishes building the graph.
-
-        If graphviz is True, adds a label tag to each sequence edge to improve understandability in graphviz
+        Adds a label tag to each sequence edge to improve understandability in graphviz. Generally for debugging
+        purposes.
         """
-        if graphviz is True:
-            self_loops = set(self.selfloop_edges())
-            for edge in self.edges():
-                if edge in self_loops:
-                    continue
-                l, r = edge
-                self.node[l]['fontsize'] = self.node[r]['fontsize'] = 10
-                self.edge[l][r]['penwidth'] = 3
-                if remove_label(l) == remove_label(r):
-                    self.edge[l][r]['fontsize'] = 8
-                    # make a fancy label for this sequence edge if its from a source sequence
-                    if 'positions' in self.edge[l][r]:
-                        self.edge[l][r]["label"] = "\\n".join(sorted(
-                            [": ".join([y, ", ".join([str(x) for x in self.edge[l][r]['positions'][y]])]) for y in
-                             self.edge[l][r]['positions']]))
-                    self.edge[l][r]["color"] = "purple"
-                elif 'source' in self.edge[l][r]:
-                    self.edge[l][r]['color'] = "blue"
-                else:
-                    self.edge[l][r]['color'] = "green"
-        self.paralogs = sorted(self.paralogs, key=lambda x: x[0])
-        self.is_built = True
+        self_loops = set(self.selfloop_edges())
+        for edge in self.edges():
+            if edge in self_loops:
+                continue
+            l, r = edge
+            self.node[l]['fontsize'] = self.node[r]['fontsize'] = 10
+            self.edge[l][r]['penwidth'] = 3
+            if remove_label(l) == remove_label(r):
+                self.edge[l][r]['fontsize'] = 8
+                # make a fancy label for this sequence edge if its from a source sequence
+                if 'positions' in self.edge[l][r]:
+                    self.edge[l][r]["label"] = "\\n".join(sorted(
+                        [": ".join([y, ", ".join([str(x) for x in self.edge[l][r]['positions'][y]])]) for y in
+                         self.edge[l][r]['positions']]))
+                self.edge[l][r]["color"] = "purple"
+            elif 'source' in self.edge[l][r]:
+                self.edge[l][r]['color'] = "blue"
+            else:
+                self.edge[l][r]['color'] = "green"
 
     def connected_component_iter(self):
         """
-        Yields connected components. Internal is used for pruning edges within this object and should not be set to
-        True outside of this setup.
+        Yields connected components.
         """
-        assert self.is_built is True
-        for subgraph in nx.connected_component_subgraphs(self):
+        for subgraph in self.connected_component_iter():
             yield subgraph
 
     def flag_nodes(self, kmer_iter):
@@ -297,7 +286,6 @@ class UnitigGraph(nx.Graph):
         This is used to flag nodes whose kmer is represented elsewhere
         in the genome, so that we won't count it later.
         """
-        assert self.is_built is True
         for k in kmer_iter:
             k = k.rstrip()
             assert k in self.kmers
@@ -308,7 +296,6 @@ class UnitigGraph(nx.Graph):
         Takes a python dictionary mapping k1mers to an empirically derived
         weight. Applies a weight tag to each k1mer in the graph.
         """
-        assert self.is_built is True
         for k, w in weight_dict.iteritems():
             assert k in self.kmers
             self.edge[k + "_L"][k + "_R"]['weight'] = w
