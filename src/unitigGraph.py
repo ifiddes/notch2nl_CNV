@@ -188,25 +188,13 @@ class UnitigGraph(nx.Graph):
         for a, b in self.bad_source_edges:
             self.remove_edge(a, b)
 
-    def prune_individual_edges(self, level=0):
-        """
-        For each remaining subgraph, determine if it is a unitig or if read data are joining unitigs.
-        If no unitig information is present in this subgraph, remove it - we can't know which paralog(s), if any,
-        these sequences came from. Otherwise, look for bubble nodes and remove the edge connecting the unitigs such that
-        the unitig with the most common source sequences keeps the bubble. If it is a tie, discard these kmers.
-        e.g. {A,B,C} - {A,B} -> {A,B}
-             {A,B} - {A} -> {A}
-             {A,B} - {A,C} -> {A}
-             {A,A - {A} -> {A}
-             {A} - {C} -> discard
-        """
-        nodes_to_remove = set()
-        edges_to_remove = set()
-        for subgraph in self.connected_component_iter():
+    def _prune_individual_subgraph(self, parent, nodes_to_remove=set(), edges_to_remove=set()):
+        these_nodes_to_remove = set()
+        for subgraph in parent.connected_component_iter():
             source_sequences = set()
             for a, b in subgraph.edges_iter():
                 if 'positions' in subgraph.edge[a][b]:
-                    source_sequences.add(frozenset(self.edge[a][b]['positions'].iterkeys()))
+                    source_sequences.add(frozenset(parent.edge[a][b]['positions'].iterkeys()))
             if len(source_sequences) == 1:
                 # no bubbles to resolve here
                 continue
@@ -226,8 +214,8 @@ class UnitigGraph(nx.Graph):
             else:
                 for n in subgraph.nodes_iter():
                     l, r = labels_from_node(n)
-                    if 'positions' in self.edge[l][r]:
-                        these_paralogs = frozenset(self.edge[l][r]['positions'].iterkeys())
+                    if 'positions' in parent.edge[l][r]:
+                        these_paralogs = frozenset(parent.edge[l][r]['positions'].iterkeys())
                         if these_paralogs != common_paralogs:
                             for next_node in subgraph.adj[n]:
                                 if 'source' in subgraph.edge[n][next_node]:
@@ -235,6 +223,39 @@ class UnitigGraph(nx.Graph):
                                 elif remove_label(n) == remove_label(next_node):
                                     continue
                                 edges_to_remove.add(frozenset(sorted([n, next_node])))
+            for a, b in edges_to_remove:
+                subgraph.remove_edge(a, b)
+            for n in nodes_to_remove:
+                subgraph.remove_node(n)
+            for new_subgraph in subgraph.connected_component_iter():
+                source_sequences = {tuple(new_subgraph.edge[a][b]['positions'].keys()) for a, b in
+                                    new_subgraph.edges_iter() if 'positions' in new_subgraph.edge[a][b]}
+                if len(source_sequences) != 1:
+                    n, e = self._prune_individual_subgraph(new_subgraph, nodes_to_remove, edges_to_remove)
+                    nodes_to_remove |= n
+                    edges_to_remove |= e
+                else:
+                    return nodes_to_remove, edges_to_remove
+        return nodes_to_remove, edges_to_remove
+
+    def prune_individual_edges(self):
+        """
+        For each remaining subgraph, determine if it is a unitig or if read data are joining unitigs.
+        If no unitig information is present in this subgraph, remove it - we can't know which paralog(s), if any,
+        these sequences came from. Otherwise, look for bubble nodes and remove the edge connecting the unitigs such that
+        the unitig with the most common source sequences keeps the bubble. If it is a tie, discard these kmers.
+        e.g. {A,B,C} - {A,B} -> {A,B}
+             {A,B} - {A} -> {A}
+             {A,B} - {A,C} -> {A}
+             {A,A - {A} -> {A}
+             {A} - {C} -> discard
+        """
+        nodes_to_remove = set()
+        edges_to_remove = set()
+        for subgraph in self.connected_component_iter():
+            n, e = self._prune_individual_subgraph(subgraph)
+            nodes_to_remove |= n
+            edges_to_remove |= e
         for a, b in edges_to_remove:
             self.remove_edge(a, b)
         for n in nodes_to_remove:
@@ -242,16 +263,6 @@ class UnitigGraph(nx.Graph):
             k = remove_label(n)
             if k in self.kmers:
                 self.kmers.remove(k)
-        # do we need to do another pass of pruning?
-        try:
-            for new_subgraph in self.connected_component_iter():
-                source_sequences = {tuple(new_subgraph.edge[a][b]['positions'].keys()) for a, b in
-                                    new_subgraph.edges_iter() if 'positions' in new_subgraph.edge[a][b]}
-                assert len(source_sequences) == 1, (source_sequences, len(new_subgraph))
-        except AssertionError:
-            # TODO: make this not so slow, there is no need to traverse the entire graph again.
-            print level
-            self.prune_individual_edges(level=level + 1)
 
     def make_graphviz_labels(self):
         """
