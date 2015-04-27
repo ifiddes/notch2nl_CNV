@@ -188,7 +188,7 @@ class UnitigGraph(nx.Graph):
         for a, b in self.bad_source_edges:
             self.remove_edge(a, b)
 
-    def prune_individual_edges(self):
+    def prune_individual_edges(self, level=0):
         """
         For each remaining subgraph, determine if it is a unitig or if read data are joining unitigs.
         If no unitig information is present in this subgraph, remove it - we can't know which paralog(s), if any,
@@ -242,14 +242,16 @@ class UnitigGraph(nx.Graph):
             k = remove_label(n)
             if k in self.kmers:
                 self.kmers.remove(k)
-        # debugging: make sure this worked
+        # do we need to do another pass of pruning?
         try:
             for new_subgraph in self.connected_component_iter():
                 source_sequences = {tuple(new_subgraph.edge[a][b]['positions'].keys()) for a, b in
                                     new_subgraph.edges_iter() if 'positions' in new_subgraph.edge[a][b]}
                 assert len(source_sequences) == 1, (source_sequences, len(new_subgraph))
         except AssertionError:
-            return new_subgraph
+            # TODO: make this not so slow, there is no need to traverse the entire graph again.
+            print level
+            self.prune_individual_edges(level=level + 1)
 
     def make_graphviz_labels(self):
         """
