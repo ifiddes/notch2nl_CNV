@@ -1,4 +1,5 @@
 import networkx as nx
+import cPickle as pickle
 from collections import defaultdict
 from src.helperFunctions import remove_label, labels_from_kmer, labels_from_node, canonical
 from jobTree.src.bioio import reverseComplement as reverse_complement
@@ -111,7 +112,7 @@ class UnitigGraph(nx.Graph):
         masked_seq should be the same length as unmasked_seq and represent the repeat masked version.
         """
         self.paralogs.append([name, offset])
-        self.paralogs = sorted(self.paralogs, key = lambda x: x[0])
+        self.paralogs = sorted(self.paralogs, key=lambda x: x[0])
         self.source_sequence_sizes[name] = len(masked_seq)
         prev_kmer = masked_seq[:self.kmer_size]
         prev_kmer_unmasked = unmasked_seq[:self.kmer_size]
@@ -188,18 +189,20 @@ class UnitigGraph(nx.Graph):
         for a, b in self.bad_source_edges:
             self.remove_edge(a, b)
 
-    def _prune_individual_subgraph(self, parent, nodes_to_remove=set(), edges_to_remove=set()):
+    def _prune_individual_subgraph(self, parent, nodes_to_remove, edges_to_remove):
         these_nodes_to_remove = set()
+        these_edges_to_remove = set()
         for subgraph in parent.connected_component_iter():
             source_sequences = set()
             for a, b in subgraph.edges_iter():
                 if 'positions' in subgraph.edge[a][b]:
-                    source_sequences.add(frozenset(parent.edge[a][b]['positions'].iterkeys()))
+                    source_sequences.add(frozenset(subgraph.edge[a][b]['positions'].iterkeys()))
             if len(source_sequences) == 1:
                 # no bubbles to resolve here
                 continue
             elif len(source_sequences) == 0:
                 # this subgraph has no anchors - can't know which paralog, if any, this came from. Remove this subgraph.
+                these_nodes_to_remove.update(subgraph.nodes())
                 nodes_to_remove.update(subgraph.nodes())
                 continue
             # this subgraph needs to be resolved. Find the common source paralogs
@@ -209,34 +212,35 @@ class UnitigGraph(nx.Graph):
                 for n in subgraph.nodes_iter():
                     a, b = labels_from_node(n)
                     if 'positions' not in subgraph.edge[a][b]:
+                        these_nodes_to_remove.update([a, b])
                         nodes_to_remove.update([a, b])
+                for a, b in subgraph.edges_iter():
+                    if 'positions' not in subgraph.edge[a][b] and 'source' not in subgraph.edge[a][b]:
+                        these_edges_to_remove.add(frozenset(sorted([a, b])))
+                        edges_to_remove.add(frozenset(sorted([a, b])))
             # remove any individual edge attached to a node whose source sequence is not common_paralogs
             else:
                 for n in subgraph.nodes_iter():
                     l, r = labels_from_node(n)
-                    if 'positions' in parent.edge[l][r]:
-                        these_paralogs = frozenset(parent.edge[l][r]['positions'].iterkeys())
+                    if 'positions' in subgraph.edge[l][r]:
+                        these_paralogs = frozenset(subgraph.edge[l][r]['positions'].iterkeys())
                         if these_paralogs != common_paralogs:
                             for next_node in subgraph.adj[n]:
                                 if 'source' in subgraph.edge[n][next_node]:
                                     continue
                                 elif remove_label(n) == remove_label(next_node):
                                     continue
+                                these_edges_to_remove.add(frozenset(sorted([n, next_node])))
                                 edges_to_remove.add(frozenset(sorted([n, next_node])))
-            for a, b in edges_to_remove:
+            for a, b in these_edges_to_remove:
                 subgraph.remove_edge(a, b)
-            for n in nodes_to_remove:
+            for n in these_nodes_to_remove:
                 subgraph.remove_node(n)
             for new_subgraph in subgraph.connected_component_iter():
                 source_sequences = {tuple(new_subgraph.edge[a][b]['positions'].keys()) for a, b in
                                     new_subgraph.edges_iter() if 'positions' in new_subgraph.edge[a][b]}
                 if len(source_sequences) != 1:
-                    n, e = self._prune_individual_subgraph(new_subgraph, nodes_to_remove, edges_to_remove)
-                    nodes_to_remove |= n
-                    edges_to_remove |= e
-                else:
-                    return nodes_to_remove, edges_to_remove
-        return nodes_to_remove, edges_to_remove
+                    self._prune_individual_subgraph(new_subgraph, nodes_to_remove, edges_to_remove)
 
     def prune_individual_edges(self):
         """
@@ -247,15 +251,14 @@ class UnitigGraph(nx.Graph):
         e.g. {A,B,C} - {A,B} -> {A,B}
              {A,B} - {A} -> {A}
              {A,B} - {A,C} -> {A}
-             {A,A - {A} -> {A}
+             {A,A} - {A} -> {A}
+             {A,C} - {B, D} -> discard
              {A} - {C} -> discard
         """
         nodes_to_remove = set()
         edges_to_remove = set()
         for subgraph in self.connected_component_iter():
-            n, e = self._prune_individual_subgraph(subgraph)
-            nodes_to_remove |= n
-            edges_to_remove |= e
+            self._prune_individual_subgraph(subgraph, nodes_to_remove, edges_to_remove)
         for a, b in edges_to_remove:
             self.remove_edge(a, b)
         for n in nodes_to_remove:
@@ -263,6 +266,11 @@ class UnitigGraph(nx.Graph):
             k = remove_label(n)
             if k in self.kmers:
                 self.kmers.remove(k)
+        # make sure this worked...
+        for i, subgraph in enumerate(self.connected_component_iter()):
+            source_sequences = {tuple(subgraph.edge[a][b]['positions'].keys()) for a, b in
+                                    subgraph.edges_iter() if 'positions' in subgraph.edge[a][b]}
+            assert len(source_sequences) == 1
 
     def make_graphviz_labels(self):
         """
