@@ -10,9 +10,10 @@ class SunModel(Target):
     """
     Runs the SUN model, where alelle fraction at unique sites is used to infer copy number
     """
-    def __init__(self, paths):
+    def __init__(self, paths, ilp_config):
         Target.__init__(self)
         self.paths = paths
+        self.ilp_config = ilp_config
         self.bam = paths.bam
         self.uuid = paths.uuid
         self.out_dir = paths.out_dir
@@ -75,7 +76,7 @@ class SunModel(Target):
         results_dict = self.find_site_coverages(self.paths.bam)
         inferred_c, inferred_d = infer_copy_number(results_dict)
         self.make_bedgraphs(results_dict)
-        self.setFollowOnTarget(KmerModel(self.paths, inferred_c, inferred_d))
+        self.setFollowOnTarget(KmerModel(self.paths, self.ilp_config, inferred_c, inferred_d))
 
 
 def infer_copy_number(results_dict):

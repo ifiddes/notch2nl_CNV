@@ -1,71 +1,53 @@
 import pulp
 from collections import defaultdict
 from src.abstractIlpSolving import SequenceGraphLpProblem
-from src.helperFunctions import remove_label
+from src.helperFunctions import remove_label, labels_from_kmer
 
 
 class Block(object):
     """
-    Represents one block (connected component).
-    Each block may have anywhere from 1 to n paralogs represented in
-    it. Initialized by passing in all of the nodes from one UnitigGraph
-    CC. Stores a mapping between each paralog this CC represents
-    to the start and stop positions in the source sequence.
-    Also stores all of the kmers in this block as a set.
+    Represents one block (connected component). Each block may have anywhere from 1 to n paralogs represented in it.
+    Initialized by passing one connected component subgraph from a UnitigGraph. Creates a ILP variable for each
+    instance of a paralog in this unitig.
     """
     def __init__(self, subgraph, min_ploidy=0, max_ploidy=4):
-        self.variables = {}
         self.subgraph = subgraph
+        self.variable_map = {}
         self.adjusted_count = None
         # each block gets its own trash bin - a place for extra kmer counts to go
         self.trash = pulp.LpVariable(str(id(self)), lowBound=0)
-        # find all sequence edges
-        sequence_edges = [x for x in subgraph.edges() if remove_label(x[0]) == remove_label(x[1])]
-        # find all valid kmers
-        self.kmers = {remove_label(a) for a, b in sequence_edges if 'bad' not in subgraph[a][b]}
-        begin_a, begin_b = sequence_edges[0]
-        # now we want to find the first and last nodes
-        # loop over paralogs
-        for p in subgraph[begin_a][begin_b]['positions'].iterkeys():
-            # pick a random sequence edge to start at (networkx stores these unordered)
-            start_a, start_b = begin_a, begin_b
-            # loop over the instances of this paralog
-            for i in xrange(len(subgraph[start_a][start_b]['positions'][p])):
-                # find the start and stop node for each instance of this paralog
-                s = subgraph[start_a][start_b]['positions'][p][i]
-                # loop over all remaining sequence edges and update the start as necessary
-                for new_a, new_b in sequence_edges[1:]:
-                    new_s = subgraph[new_a][new_b]['positions'][p][i]
-                    if new_s < s:
-                        s = new_s
-                        start_a, start_b = new_a, new_b
-                if len(self.kmers) > 0:
-                    self.variables[(p, s)] = pulp.LpVariable("{}_{}".format(p, s), lowBound=min_ploidy,
-                                                             upBound=max_ploidy, cat="Integer")
-                else:
-                    self.variables[(p, s)] = None
+        # adjust the kmer set to remove kmers flagged as bad
+        self.kmers = set()
+        for k in subgraph.kmers:
+            l, r = labels_from_kmer(k)
+            if 'bad' not in subgraph.edge[l][r]:
+                self.kmers.add(k)
+        for para, start in subgraph.paralogs.iteritems():
+            if len(self.kmers) > 0:
+                self.variable_map[(para, start)] = pulp.LpVariable("{}_{}".format(para, start), lowBound=min_ploidy,
+                                                                upBound=max_ploidy, cat="Integer")
+            else:
+                self.variable_map[(para, start)] = None
 
-    def kmer_iter(self):
-        """iterator over all kmers in this block"""
-        for kmer in self.kmers:
-            yield kmer
+    def __len__(self):
+        return len(self.subgraph.source_kmers)
 
     def variable_iter(self):
-        """iterator over variables and related values in this block"""
-        for (para, start), variable in self.variables.iteritems():
+        for (para, start), variable in self.variable_map.iteritems():
             yield para, start, variable
 
-    def get_variables(self):
-        """returns all LP variables in this block"""
-        return [x for x in self.variables.values() if x is not None]
+    @property
+    def variables(self):
+        return [v for v in self.variable_map.itervalues() if v is not None]
 
-    def get_kmers(self):
-        """returns set of all kmers in block"""
-        return self.kmers
+    @property
+    def paralogs(self):
+        return [para for para, _ in self.variable_map.iterkeys()]
 
-    def get_trash(self):
-        """returns the trash variable for this block"""
-        return self.trash
+    @property
+    def paralog_pos_map(self):
+        return {para: start for para, start in self.variable_map.iterkeys()}
+
 
 
 class KmerIlpModel(SequenceGraphLpProblem):
@@ -80,44 +62,39 @@ class KmerIlpModel(SequenceGraphLpProblem):
         Larger values restricts breakpoints.
     data_penalty: how much do we trust the data? Larger values locks the variables more
         strongly to the data.
-    diploid_penalty: How much do we want to favor copy number of default_ploidy?
     trash_penalty: How much do we want to favor dumping extra kmer counts into the trash bin?
     expected_value_penalty: How much do we want to favor the expected copy number total per block?
     """
-    def __init__(self, UnitigGraph, normalizing, breakpoint_penalty=15, data_penalty=1, diploid_penalty=1,
-                 trash_penalty=1, expected_value_penalty=1, infer_c=None, infer_d=None, default_ploidy=2):
+    def __init__(self, UnitigGraph, normalizing, breakpoint_penalty=1, data_penalty=1, trash_penalty=1,
+                 expected_value_penalty=1, infer_c=None, infer_d=None, default_ploidy=2):
         SequenceGraphLpProblem.__init__(self)
         self.graph = UnitigGraph
-        # list of Block objects
-        self.blocks = []
-        # maps Block objects to the paralogs they contain
-        self.block_map = {x[0]: [] for x in UnitigGraph.paralogs}
-        # maps the genome start position of each paralog for plotting later
-        self.offset_map = {x[0]: int(x[1]) for x in UnitigGraph.paralogs}
         self.normalizing = normalizing
         self.breakpoint_penalty = breakpoint_penalty
         self.data_penalty = data_penalty
         self.trash_penalty = trash_penalty
-        self.diploid_penalty = diploid_penalty
         self.expected_value_penalty = expected_value_penalty
-        self.default_ploidy = default_ploidy
-        self.infer_c = infer_c
-        self.infer_d = infer_d
-        # prepare expected_ploidy_dict, using previously inferred values for C/D if they were passed
-        self.expected_ploidy_dict = {x[0]: self.default_ploidy for x in self.graph.paralogs}
-        if infer_c is not None:
-            self.expected_ploidy_dict["Notch2NL-C"] = infer_c
-        if infer_d is not None:
-            self.expected_ploidy_dict["Notch2NL-D"] = infer_d
-        self.build_blocks(UnitigGraph)
+        self.expected_ploidy = {}
+        for para in UnitigGraph.paralogs.iterkeys():
+            if para == "Notch2NL-C":
+                self.expected_ploidy[para] = infer_c
+            elif para == "Notch2NL-D":
+                self.expected_ploidy[para] = infer_d
+            else:
+                self.expected_ploidy[para] = default_ploidy
+        # list of Block objects
+        self.blocks = []
+        # maps Block objects to the paralogs they contain
+        self.block_map = {x: [] for x in UnitigGraph.paralogs.iterkeys()}
+        self._build_blocks(UnitigGraph, infer_c, infer_d)
 
-    def build_blocks(self):
+    def _build_blocks(self, UnitigGraph, infer_c, infer_d):
         """
         Requires a UnitigGraph, which is a networkx UnitigGraph built over the genome region of interest.
         See unitigGraph.py
         """
         # build the blocks, don't tie them together yet
-        for subgraph in self.graph.connected_component_iter():
+        for subgraph in UnitigGraph.connected_component_iter():
             b = Block(subgraph)
             self.blocks.append(b)
 
@@ -138,15 +115,10 @@ class KmerIlpModel(SequenceGraphLpProblem):
                 var_a, var_b = variables[i - 1], variables[i]
                 self.constrain_approximately_equal(var_a, var_b, penalty=self.breakpoint_penalty)
 
-        # tie each variable to be approximately equal to copy number 2 subject to the diploid_penalty constraint
-        for block in self.blocks:
-            for para, start, variable in block.variable_iter():
-                self.constrain_approximately_equal(self.default_ploidy, variable, penalty=self.diploid_penalty)
-
         # tie each block sum to be approximately equal to the expected value subject to expected_value_penalty
         for block in self.blocks:
-            exp = sum(self.expected_ploidy_dict[p] for p, s, v in block.variable_iter() if v is not None)
-            self.constrain_approximately_equal(exp, sum(block.get_variables()), penalty=self.expected_value_penalty)
+            exp = sum(self.expected_ploidy[p] for p, s, v in block.variable_iter() if v is not None)
+            self.constrain_approximately_equal(exp, sum(block.variables), penalty=self.expected_value_penalty)
 
         # now we force all Notch2 variables to be equal to 2
         if "Notch2" in self.block_map:
@@ -154,17 +126,17 @@ class KmerIlpModel(SequenceGraphLpProblem):
                 self.add_constraint(var == 2)
 
         # if we have previously inferred C/D copy numbers, set those values
-        if self.infer_c is not None:
+        if infer_c is not None:
             for start, var, block in self.block_map["Notch2NL-C"]:
                 self.add_constraint(var == self.infer_c)
 
-        if self.infer_d is not None:
+        if infer_d is not None:
             for start, var, block in self.block_map["Notch2NL-D"]:
                 self.add_constraint(var == self.infer_d)
 
         # finally, constrain all trash bins to be as close to zero as possible
         for b in self.blocks:
-            self.constrain_approximately_equal(b.get_trash(), 0, penalty=self.trash_penalty)
+            self.constrain_approximately_equal(b.trash, 0, penalty=self.trash_penalty)
 
     def introduce_data(self, kmer_counts):
         """
@@ -174,10 +146,10 @@ class KmerIlpModel(SequenceGraphLpProblem):
         for block in self.blocks:
             if len(block.kmers) == 0:
                 continue
-            count = sum(kmer_counts[k] * self.graph.weights[k] for k in block.get_kmers())
+            count = sum(kmer_counts[k] for k in block.get_kmers())
             adjusted_count = (1.0 * count) / (len(block.kmers) * self.normalizing)
             block.adjusted_count = adjusted_count
-            self.constrain_approximately_equal(adjusted_count, sum(block.get_variables() + [block.get_trash()]),
+            self.constrain_approximately_equal(adjusted_count, sum(block.variables + [block.get_trash()]),
                                                penalty=self.data_penalty)
 
     def report_normalized_raw_data_map(self):

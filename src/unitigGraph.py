@@ -1,6 +1,6 @@
 import networkx as nx
 import cPickle as pickle
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from src.helperFunctions import remove_label, labels_from_kmer, labels_from_node, canonical
 from jobTree.src.bioio import reverseComplement as reverse_complement
 
@@ -19,33 +19,23 @@ class UnitigGraph(nx.Graph):
 
     To finish representing a UnitigGraph, this resulting graph must be pruned. Any node which has more than one
     adjacency edge exiting or entering the node has all adjacency edges removed.
+
+    Derived should be set to False for only the parent graph. Derived graphs (created by the copying function of
+    networkx generally when finding connected subgraphs) will not retain the masking, source edge or normalization
+    information.
     """
 
-    def __init__(self, kmer_size=49):
+    def __init__(self, kmer_size=49, derived=True):
         nx.Graph.__init__(self)
         self.kmer_size = kmer_size
-        self.paralogs = []
+        self.paralogs = OrderedDict()
         self.kmers = set()
-        # masked kmers stores kmers that were repeat masked and should be ignored in individual data
-        self.masked_kmers = set()
-        # these are edges that were pruned from the source graph and should NOT be re-introduced by the individual
-        self.bad_source_edges = set()
-        self.normalizing_kmers = set()
-        self.source_sequence_sizes = {}
-
-    def add_normalizing(self, seq):
-        """
-        Adds normalizing kmers to the graph. These kmers are from a region of notch2
-        that is after the duplication breakpoint, and so has exactly two copies in everyone.
-
-        These kmers are stored as whichever strand comes first lexicographically.
-        This is how jellyfish in the -C mode will report the kmer.
-        """
-        for i in xrange(len(seq) - self.kmer_size + 1):
-            s = canonical(seq[i:i + self.kmer_size].upper())
-            if "N" in s:
-                continue
-            self.normalizing_kmers.add(s)
+        self.source_kmers = set()
+        if derived is False:
+            # masked kmers stores kmers that were repeat masked and should be ignored in individual data
+            self.masked_kmers = set()
+            # these are edges that were pruned from the source graph and should NOT be re-introduced by the individual
+            self.bad_source_edges = set()
 
     def _build_source_nodes(self, kmer, pos, name):
         """
@@ -68,6 +58,7 @@ class UnitigGraph(nx.Graph):
             self.edge[l][r]['positions'][name].append(pos)
             assert prev_size == len(self)
         self.kmers.add(kmer_canonical)
+        self.source_kmers.add(kmer_canonical)
 
     def _determine_orientation(self, prev, prev_canonical, kmer, kmer_canonical):
         if prev == prev_canonical:
@@ -111,9 +102,9 @@ class UnitigGraph(nx.Graph):
         """
         masked_seq should be the same length as unmasked_seq and represent the repeat masked version.
         """
-        self.paralogs.append([name, offset])
-        self.paralogs = sorted(self.paralogs, key=lambda x: x[0])
-        self.source_sequence_sizes[name] = len(masked_seq)
+        assert name not in self.paralogs
+        self.paralogs[name] = offset
+        self.paralogs = OrderedDict(sorted(self.paralogs.iteritems(), key=lambda x: x[0]))
         prev_kmer = masked_seq[:self.kmer_size]
         prev_kmer_unmasked = unmasked_seq[:self.kmer_size]
         prev_pos = 0
@@ -300,8 +291,27 @@ class UnitigGraph(nx.Graph):
     def connected_component_iter(self):
         """
         Yields connected components.
+
+        TODO: right now this will 'forget' if a kmer came from more than one position.
+        This is not a problem with the base graph at 49bp kmers, but could be for smaller k values.
         """
         for subgraph in nx.connected_component_subgraphs(self):
+            # rebuild the kmer set based on this subgraph
+            subgraph.kmers = {remove_label(n) for n in subgraph.nodes_iter()}
+            # find which of these kmers are source kmers (used to normalize this unitig)
+            subgraph.source_kmers = self.source_kmers & subgraph.kmers
+            # now we find the smallest source position for each paralog
+            source_sequence_edges = [[a, b] for a, b in subgraph.edges_iter() if remove_label(a) == remove_label(b)
+                                     and 'positions' in subgraph.edge[a][b]]
+            tmp_map = defaultdict(list)
+            for a, b in source_sequence_edges:
+                for para, positions in subgraph.edge[a][b]['positions'].iteritems():
+                    tmp_map[para].extend(positions)
+            for para, positions in tmp_map.iteritems():
+                # this is where the bug is. Due to repeat masking, we can't know if a break in continuous integers
+                # in position values represents masked gaps or the kmer being represented more than once
+                subgraph.paralogs[para] = sorted(positions)[0] + self.paralogs[para]
+            subgraph.paralogs = OrderedDict(sorted(subgraph.paralogs.iteritems(), key=lambda x: x[0]))
             yield subgraph
 
     def flag_nodes(self, kmer_iter):
@@ -313,13 +323,5 @@ class UnitigGraph(nx.Graph):
         for k in kmer_iter:
             k = k.rstrip()
             assert k in self.kmers
-            self.edge[k + "_L"][k + "_R"]['bad'] = True
-
-    def weight_kmers(self, weight_dict):
-        """
-        Takes a python dictionary mapping k1mers to an empirically derived
-        weight. Applies a weight tag to each k1mer in the graph.
-        """
-        for k, w in weight_dict.iteritems():
-            assert k in self.kmers
-            self.edge[k + "_L"][k + "_R"]['weight'] = w
+            l, r = labels_from_kmer(k)
+            self.edge[l][r]['bad'] = True
