@@ -11,7 +11,7 @@ class Block(object):
     instance of a paralog in this unitig.
     """
     def __init__(self, subgraph, min_ploidy=0, max_ploidy=4):
-        self.subgraph = subgraph
+        self._size = len(self.subgraph.source_kmers)
         self.variable_map = {}
         self.adjusted_count = None
         # each block gets its own trash bin - a place for extra kmer counts to go
@@ -30,7 +30,7 @@ class Block(object):
                 self.variable_map[(para, start)] = None
 
     def __len__(self):
-        return len(self.subgraph.source_kmers)
+        return self._size
 
     def variable_iter(self):
         for (para, start), variable in self.variable_map.iteritems():
@@ -39,15 +39,6 @@ class Block(object):
     @property
     def variables(self):
         return [v for v in self.variable_map.itervalues() if v is not None]
-
-    @property
-    def paralogs(self):
-        return [para for para, _ in self.variable_map.iterkeys()]
-
-    @property
-    def paralog_pos_map(self):
-        return {para: start for para, start in self.variable_map.iterkeys()}
-
 
 
 class KmerIlpModel(SequenceGraphLpProblem):
@@ -65,11 +56,10 @@ class KmerIlpModel(SequenceGraphLpProblem):
     trash_penalty: How much do we want to favor dumping extra kmer counts into the trash bin?
     expected_value_penalty: How much do we want to favor the expected copy number total per block?
     """
-    def __init__(self, UnitigGraph, normalizing, breakpoint_penalty=1, data_penalty=1, trash_penalty=1,
-                 expected_value_penalty=1, infer_c=None, infer_d=None, default_ploidy=2):
+    def __init__(self, UnitigGraph, breakpoint_penalty=1, data_penalty=1, trash_penalty=1, expected_value_penalty=1,
+                 infer_c=None, infer_d=None, default_ploidy=2):
         SequenceGraphLpProblem.__init__(self)
         self.graph = UnitigGraph
-        self.normalizing = normalizing
         self.breakpoint_penalty = breakpoint_penalty
         self.data_penalty = data_penalty
         self.trash_penalty = trash_penalty
@@ -144,10 +134,10 @@ class KmerIlpModel(SequenceGraphLpProblem):
         representing the results of kmer counting a WGS dataset (format seq:count)
         """
         for block in self.blocks:
-            if len(block.kmers) == 0:
+            if len(block) == 0:
                 continue
             count = sum(kmer_counts[k] for k in block.get_kmers())
-            adjusted_count = (1.0 * count) / (len(block.kmers) * self.normalizing)
+            adjusted_count = (1.0 * count) / (len(block.kmers) * normalizing)
             block.adjusted_count = adjusted_count
             self.constrain_approximately_equal(adjusted_count, sum(block.variables + [block.get_trash()]),
                                                penalty=self.data_penalty)
@@ -171,7 +161,8 @@ class KmerIlpModel(SequenceGraphLpProblem):
             final_start, final_var, final_block = self.block_map[para][-1]
             final_span = self.graph.sizes[para] - final_start
             if final_var is not None:
-                copy_map[para].append([final_start + offset, final_span, block.adjusted_count / len(block.get_variables())])
+                copy_map[para].append([final_start + offset, final_span, block.adjusted_count /
+                                       len(block.get_variables())])
             else:
                 copy_map[para].append([final_start + offset, final_span, prev_var])
         return copy_map

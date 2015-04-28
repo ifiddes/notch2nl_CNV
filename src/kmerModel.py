@@ -33,11 +33,14 @@ class KmerModel(Target):
             elif seq in normalizing_kmers:
                 normalizing += count
         normalizing /= (1.0 * len(normalizing_kmers))
-        ilp_model = KmerIlpModel(graph, normalizing, breakpoint_penalty=self.ilp_config.breakpoint_penalty,
+        ilp_model = KmerIlpModel(graph, breakpoint_penalty=self.ilp_config.breakpoint_penalty,
                                  data_penalty=self.ilp_config.data_penalty,
                                  trash_penalty=self.ilp_config.trash_penalty,
                                  expected_value_penalty=self.ilp_config.expected_value_penalty,
                                  infer_c=self.inferred_c, infer_d=self.inferred_d, default_ploidy=2)
+        ilp_model.introduce_data(data_counts, normalizing)
+        ilp_model.solve()
+
 
 
 def get_normalizing_kmers(normalizing_path):
