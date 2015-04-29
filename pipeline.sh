@@ -8,7 +8,7 @@ genomes="GRCh37-lite"
 tissue_types="10"
 debug_cutoff="2"
 
-export PATH=./bin/:./sonLib/bin:./jobTree/bin:${PATH}
+export PATH=./sonLib/bin:./jobTree/bin:${PATH}
 export PYTHONPATH=./:${PYTHONPATH}
 
 if [ -d ${jobTree} ]; then
