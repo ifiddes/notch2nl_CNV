@@ -15,8 +15,8 @@ if [ -d ${jobTree} ]; then
     rm -rf ${jobTree}
 fi
 
-if [ -ne ${queries} ]; then
-    python src/cgQueryHandler.py --genomes ${genomes} --tissue_types ${tissue_types} --debug_cutoff ${debug_cutoff}
+if [ ! -e ${queries} ]; then
+    python src/cgqueryHandler.py --genomes ${genomes} --tissue_types ${tissue_types} --debug_cutoff ${debug_cutoff}
 fi
 
-python src/main.py --cgquery_file ${queries}
+python src/main.py --cgquery_file ${queries} --jobTree ${jobTree} --maxThreads ${maxThreads} --loglevel DEBUG &> ${log}
