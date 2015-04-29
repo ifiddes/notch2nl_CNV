@@ -75,11 +75,11 @@ class SunModel(Target):
                 outf.write("\t".join(map(str, ["chr1", pos, pos + 1, val])) + "\n")
 
     def run(self):
-        sun_results = self.find_site_coverages(self.paths.bam)
+        sun_results = self.find_site_coverages(self.bam_path)
         inferred_c, inferred_d = infer_copy_number(sun_results)
         #self.make_bedgraphs(sun_results)
         self.setFollowOnTarget(KmerModel(self.paths, self.uuid, self.ilp_config, sun_results, self.fastq_path,
-                                         self.kmer_counts_path, self.k_plus1_mer_counts_pathinferred_c, inferred_d))
+                                         self.kmer_counts_path, self.k_plus1_mer_counts_path, inferred_c, inferred_d))
 
 
 def infer_copy_number(sun_results):

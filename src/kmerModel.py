@@ -31,8 +31,8 @@ class KmerModel(Target):
 
     def run(self):
         graph = UnitigGraph(kmer_size=self.ilp_config.kmer_size, derived=False)
-        add_mole_to_graph(graph, self.paths.unmasked_mole, self.paths.masked_mole)
-        add_individual_to_graph(graph, self.k_plus1_mer_counts)
+        add_mole_to_graph(graph, self.paths.unmasked_ref, self.paths.masked_ref)
+        add_individual_to_graph(graph, self.k_plus1_mer_counts_path)
         graph.flag_nodes(open(self.paths.bad_kmers))
         normalizing_kmers = get_normalizing_kmers(self.paths.normalizing)
         try:
