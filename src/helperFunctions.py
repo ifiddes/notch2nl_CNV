@@ -64,4 +64,4 @@ def count_reader(path_or_file):
 def format_ratio(numerator, denominator):
     if denominator == 0:
         return float("nan")
-    return float(numerator)/denominator
+    return float(numerator) / denominator

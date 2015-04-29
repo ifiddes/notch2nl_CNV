@@ -1,5 +1,13 @@
+import os
+import math
+from collections import defaultdict
 from itertools import izip
-import cPickle as pickle
+
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import numpy as np
+
 from src.kmerIlpModel import KmerIlpModel
 from src.unitigGraph import UnitigGraph
 from src.helperFunctions import count_reader, canonical
@@ -8,31 +16,30 @@ from jobTree.scriptTree.target import Target
 
 
 class KmerModel(Target):
-    def __init__(self, paths, ilp_config, inferred_c, inferred_d):
+    def __init__(self, paths, uuid, ilp_config, sun_results, fastq_path, kmer_counts_path, k_plus1_mer_counts_path,
+                 inferred_c, inferred_d):
         Target.__init__(self)
         self.paths = paths
+        self.uuid = uuid
         self.ilp_config = ilp_config
+        self.sun_results = sun_results
+        self.fastq_path = fastq_path
+        self.kmer_counts_path = kmer_counts_path
+        self.k_plus1_mer_counts_path = k_plus1_mer_counts_path
         self.inferred_c = inferred_c
         self.inferred_d = inferred_d
 
     def run(self):
         graph = UnitigGraph(kmer_size=self.ilp_config.kmer_size, derived=False)
         add_mole_to_graph(graph, self.paths.unmasked_mole, self.paths.masked_mole)
-        add_individual_to_graph(graph, self.paths.k_plus1_mer_counts)
-        if self.paths.bad_kmers is not None:
-            graph.flag_nodes(open(self.paths.bad_kmers))
-        if self.paths.graph_out_path is not None:
-            pickle.dump(graph, self.paths.graph_out_path)
+        add_individual_to_graph(graph, self.k_plus1_mer_counts)
+        graph.flag_nodes(open(self.paths.bad_kmers))
         normalizing_kmers = get_normalizing_kmers(self.paths.normalizing)
-        assert len(graph.kmers & graph.normalizing_kmers) == 0
-        data_counts = {}
-        normalizing = 0
-        for count, seq in count_reader(self.paths.kmer_counts):
-            if seq in graph.kmers:
-                data_counts[seq] = count
-            elif seq in normalizing_kmers:
-                normalizing += count
-        normalizing /= (1.0 * len(normalizing_kmers))
+        try:
+            assert len(graph.kmers & normalizing_kmers) == 0
+        except AssertionError:
+            raise RuntimeError("Normalizing kmer file contains kmers in the input reference files.")
+        data_counts, normalizing = get_kmer_counts(graph, normalizing_kmers, self.kmer_counts_path)
         ilp_model = KmerIlpModel(graph, breakpoint_penalty=self.ilp_config.breakpoint_penalty,
                                  data_penalty=self.ilp_config.data_penalty,
                                  trash_penalty=self.ilp_config.trash_penalty,
@@ -40,11 +47,25 @@ class KmerModel(Target):
                                  infer_c=self.inferred_c, infer_d=self.inferred_d, default_ploidy=2)
         ilp_model.introduce_data(data_counts, normalizing)
         ilp_model.solve()
-
+        result_dict = ilp_model.report_copy_map()
+        raw_counts = ilp_model.report_normalized_raw_data_map()
+        combined_plot(result_dict, raw_counts, graph.paralogs, self.sun_results, self.uuid, self.out_dir)
 
 
 def get_normalizing_kmers(normalizing_path):
     return {canonical(seq) for name, seq in fasta_read(normalizing_path)}
+
+
+def get_kmer_counts(graph, normalizing_kmers, kmer_counts_file):
+        data_counts = {}
+        normalizing = 0
+        for count, seq in count_reader(kmer_counts_file):
+            if seq in graph.kmers:
+                data_counts[seq] = count
+            elif seq in normalizing_kmers:
+                normalizing += count
+        normalizing /= (1.0 * len(normalizing_kmers))
+        return data_counts, normalizing
 
 
 def add_individual_to_graph(graph, k1mer_counts):
@@ -76,5 +97,53 @@ def add_mole_to_graph(graph, unmasked_mole, masked_mole):
         seq_map[(name, offset)] = [masked_seq, unmasked_seq]
         graph.add_masked_kmers(masked_seq, unmasked_seq)
     for (name, offset), (masked_seq, unmasked_seq) in seq_map.iteritems():
-         graph.add_source_sequence(name, offset, masked_seq, unmasked_seq)
+        graph.add_source_sequence(name, offset, masked_seq, unmasked_seq)
     graph.prune_source_edges()
+
+
+def combined_plot(ilpDict, rawCounts, offsetMap, unfilteredSunDict, uuid, outDir):
+    """
+    Generates a final combined plot overlaying both ILP and SUN results.
+    """
+    colors = ["#9b59b6", "#3498db", "#e74c3c", "#34495e", "#2ecc71"]
+    explodedRawCounts = explodeResultDict(rawCounts, offsetMap)
+    explodedData = explodeResultDict(ilpDict, offsetMap)
+    # used because the SUN model uses single letter labels
+    paraMap = {"Notch2NL-A": "A", "Notch2NL-B": "B", "Notch2NL-C": "C", "Notch2NL-D": "D", "Notch2": "N"}
+    sortedParalogs = ["Notch2NL-A", "Notch2NL-B", "Notch2NL-C", "Notch2NL-D", "Notch2"]
+    fig, plots = plt.subplots(len(sortedParalogs), sharey=True)
+    plt.yticks((0, 1, 2, 3, 4))
+    plt.suptitle("kmer-DeBruijn ILP and SUN results")
+    maxGap = max(len(x) for x in explodedRawCounts.itervalues())
+    for i, (p, para) in enumerate(izip(plots, sortedParalogs)):
+        data = explodedData[para]
+        rawData = explodedRawCounts[para]
+        windowedRawData = [sum(rawData[k:k+300])/300 for k in xrange(0, len(rawData), 300)]
+        start = offsetMap[para]
+        stop = start + len(data)
+        rounded_max_gap = int(math.ceil(1.0 * maxGap / 10000) * 10000)
+        p.axis([start, start + rounded_max_gap, 0, 4])
+        x_ticks = [start] + range(start + 20000, start + rounded_max_gap, 20000) + [stop]
+        p.axes.set_xticks(x_ticks)
+        p.axes.set_xticklabels([str(start)] + [str(20000 * x) for x in xrange(1, len(x_ticks) - 1)] + [stop])
+        p.fill_between(range(start, stop), data, color=colors[i], alpha=0.8)
+        p.plot(range(start, stop, 300), windowedRawData, alpha=0.8, linewidth=1.5)
+        if len(unfilteredSunDict[paraMap[para]]) > 0:
+            sunPos, sunVals = zip(*unfilteredSunDict[paraMap[para]])
+            p.vlines(np.asarray(sunPos), np.zeros(len(sunPos)), sunVals, color="#E83535")
+        for i in range(1, 4):
+            p.axhline(y=i, ls="--", lw=0.8)
+        p.set_title("{}".format(para))
+    fig.subplots_adjust(hspace=0.8)
+    plt.savefig(os.path.join(outDir, uuid + ".combined.png"), format="png")
+    plt.close()
+
+
+def explodeResultDict(rd, offsetMap):
+    r = defaultdict(list)
+    for para in rd:
+        prevStart = offsetMap[para]
+        for start, span, val in rd[para]:
+            r[para].extend([val] * (start - prevStart))
+            prevStart = start
+    return r
