@@ -67,7 +67,10 @@ def main():
                            args.kmer_size)
     paths = paths_tuple(args.out_dir, args.aln_index, args.whitelist, args.masked_ref_path, args.unmasked_ref_path,
                         args.bad_kmers, args.normalizing, args.key_file)
-    cgquery_dict = pickle.load(open(args.cgquery_file))
+    try:
+        cgquery_dict = pickle.load(open(args.cgquery_file))
+    except IOError:
+        raise IOError "Cgquery dict does not exist."
 
     i = Stack(Target.makeTargetFn(build_analyses, args=(paths, ilp_config, cgquery_dict)))
 
