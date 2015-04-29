@@ -1,5 +1,6 @@
 import os
 import pysam
+import cPickle as pickle
 from collections import defaultdict, Counter
 from src.helperFunctions import format_ratio
 from src.kmerModel import KmerModel
@@ -62,9 +63,9 @@ class SunModel(Target):
         """
         Generates hg38 bedGraphs for the SUN results.
         """
-        if not os.path.exists(os.path.join(self.paths.out_dir, "tracks")):
-            os.mkdir(os.path.join(self.paths.out_dir, "tracks"))
-        path = os.path.join(self.paths.out_dir, "tracks", "{}.sun_model.hg38.bedGraph".format(self.uuid))
+        if not os.path.exists(os.path.join(self.paths.out_dir, self.uuid, "tracks")):
+            os.mkdir(os.path.join(self.paths.out_dir, self.uuid, "tracks"))
+        path = os.path.join(self.paths.out_dir, self.uuid, "tracks", "{}.sun_model.hg38.bedGraph".format(self.uuid))
         merged_results = [[pos, val] for result in sun_results.itervalues() for pos, val in result]
         sorted_merged_results = sorted(merged_results, key=lambda x: x[0])
         with open(path, "w") as outf:
@@ -78,6 +79,7 @@ class SunModel(Target):
         sun_results = self.find_site_coverages(self.bam_path)
         inferred_c, inferred_d = infer_copy_number(sun_results)
         #self.make_bedgraphs(sun_results)
+        pickle.dump(sun_results, open(os.path.join(self.paths.out_dir, self.uuid, "sun_results.pickle"), "w"))
         self.setFollowOnTarget(KmerModel(self.paths, self.uuid, self.ilp_config, sun_results, self.fastq_path,
                                          self.kmer_counts_path, self.k_plus1_mer_counts_path, inferred_c, inferred_d))
 

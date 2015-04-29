@@ -11,7 +11,7 @@ class Block(object):
     instance of a paralog in this unitig.
     """
     def __init__(self, subgraph, min_ploidy=0, max_ploidy=4):
-        self._size = len(self.subgraph.source_kmers)
+        self._size = len(subgraph.source_kmers)
         self.variable_map = {}
         self.adjusted_count = None
         # each block gets its own trash bin - a place for extra kmer counts to go
@@ -66,9 +66,9 @@ class KmerIlpModel(SequenceGraphLpProblem):
         self.expected_value_penalty = expected_value_penalty
         self.expected_ploidy = {}
         for para in UnitigGraph.paralogs.iterkeys():
-            if para == "Notch2NL-C":
+            if para == "Notch2NL-C" and infer_c is not None:
                 self.expected_ploidy[para] = infer_c
-            elif para == "Notch2NL-D":
+            elif para == "Notch2NL-D" and infer_d is not None:
                 self.expected_ploidy[para] = infer_d
             else:
                 self.expected_ploidy[para] = default_ploidy
@@ -118,17 +118,17 @@ class KmerIlpModel(SequenceGraphLpProblem):
         # if we have previously inferred C/D copy numbers, set those values
         if infer_c is not None:
             for start, var, block in self.block_map["Notch2NL-C"]:
-                self.add_constraint(var == self.infer_c)
+                self.add_constraint(var == infer_c)
 
         if infer_d is not None:
             for start, var, block in self.block_map["Notch2NL-D"]:
-                self.add_constraint(var == self.infer_d)
+                self.add_constraint(var == infer_d)
 
         # finally, constrain all trash bins to be as close to zero as possible
         for b in self.blocks:
             self.constrain_approximately_equal(b.trash, 0, penalty=self.trash_penalty)
 
-    def introduce_data(self, kmer_counts):
+    def introduce_data(self, kmer_counts, normalizing):
         """
         Introduces data to this ILP kmer model. For this, the input is assumed to be a dict
         representing the results of kmer counting a WGS dataset (format seq:count)
@@ -136,10 +136,10 @@ class KmerIlpModel(SequenceGraphLpProblem):
         for block in self.blocks:
             if len(block) == 0:
                 continue
-            count = sum(kmer_counts[k] for k in block.get_kmers())
+            count = sum(kmer_counts.get(k, 0) for k in block.kmers)
             adjusted_count = (1.0 * count) / (len(block.kmers) * normalizing)
             block.adjusted_count = adjusted_count
-            self.constrain_approximately_equal(adjusted_count, sum(block.variables + [block.get_trash()]),
+            self.constrain_approximately_equal(adjusted_count, sum(block.variables + [block.trash]),
                                                penalty=self.data_penalty)
 
     def report_normalized_raw_data_map(self):

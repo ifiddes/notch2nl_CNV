@@ -322,6 +322,6 @@ class UnitigGraph(nx.Graph):
         """
         for k in kmer_iter:
             k = k.rstrip()
-            assert k in self.kmers
-            l, r = labels_from_kmer(k)
-            self.edge[l][r]['bad'] = True
+            if k in self.kmers:
+                l, r = labels_from_kmer(k)
+                self.edge[l][r]['bad'] = True

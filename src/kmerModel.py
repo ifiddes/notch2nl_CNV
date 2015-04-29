@@ -34,7 +34,7 @@ class KmerModel(Target):
         add_mole_to_graph(graph, self.paths.unmasked_ref, self.paths.masked_ref)
         add_individual_to_graph(graph, self.k_plus1_mer_counts_path)
         graph.flag_nodes(open(self.paths.bad_kmers))
-        normalizing_kmers = get_normalizing_kmers(self.paths.normalizing)
+        normalizing_kmers = get_normalizing_kmers(self.paths.normalizing, self.ilp_config.kmer_size)
         try:
             assert len(graph.kmers & normalizing_kmers) == 0
         except AssertionError:
@@ -52,8 +52,15 @@ class KmerModel(Target):
         combined_plot(result_dict, raw_counts, graph.paralogs, self.sun_results, self.uuid, self.out_dir)
 
 
-def get_normalizing_kmers(normalizing_path):
-    return {canonical(seq) for name, seq in fasta_read(normalizing_path)}
+def get_normalizing_kmers(normalizing_path, kmer_size):
+    normalizing_kmers = set()
+    for _, seq in fasta_read(normalizing_path):
+        seq = seq.upper()
+        for i in xrange(len(seq) - kmer_size + 1):
+            k = seq[i:i + kmer_size]
+            if "N" not in k:
+                normalizing_kmers.add(canonical(k))
+    return normalizing_kmers
 
 
 def get_kmer_counts(graph, normalizing_kmers, kmer_counts_file):
