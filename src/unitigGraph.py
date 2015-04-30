@@ -311,7 +311,8 @@ class UnitigGraph(nx.Graph):
                 # this is where the bug is. Due to repeat masking, we can't know if a break in continuous integers
                 # in position values represents masked gaps or the kmer being represented more than once
                 sorted_positions = sorted(positions)
-                subgraph.paralogs[para] = [sorted_positions[0], sorted_positions[-1] + 1]
+                start = self.paralogs[para][0]
+                subgraph.paralogs[para] = [start + sorted_positions[0], start + sorted_positions[-1]]
             subgraph.paralogs = OrderedDict(sorted(subgraph.paralogs.iteritems(), key=lambda x: x[0]))
             yield subgraph
 
