@@ -152,12 +152,11 @@ class KmerIlpModel(SequenceGraphLpProblem):
         for para in self.block_map:
             for i in xrange(len(self.block_map[para])):
                 start, stop, var, block = self.block_map[para][i]
-                span = start - stop
                 if var is not None:
-                    copy_map[para].append([start, span, block.adjusted_count / len(block.variables)])
+                    copy_map[para].append([start, stop, block.adjusted_count / len(block.variables)])
                     prev_var = block.adjusted_count / len(block.variables)
                 else:
-                    copy_map[para].append([start, span, prev_var])
+                    copy_map[para].append([start, stop, prev_var])
         return copy_map
 
     def report_copy_map(self):
@@ -166,13 +165,11 @@ class KmerIlpModel(SequenceGraphLpProblem):
         """
         copy_map = defaultdict(list)
         for para in self.block_map:
-            offset = self.graph.paralogs[para]
             for i in xrange(len(self.block_map[para])):
                 start, stop, var, block = self.block_map[para][i]
-                span = start - stop
                 if var is not None:
-                    copy_map[para].append([start, span, pulp.value(var)])
+                    copy_map[para].append([start, stop, pulp.value(var)])
                     prev_var = pulp.value(var)
                 else:
-                    copy_map[para].append([start, span, prev_var])
+                    copy_map[para].append([start, stop, prev_var])
         return copy_map

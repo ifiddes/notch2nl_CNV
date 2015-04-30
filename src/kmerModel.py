@@ -36,7 +36,9 @@ class KmerModel(Target):
         add_mole_to_graph(graph, self.paths.unmasked_ref, self.paths.masked_ref)
         if self.add_individual is True:
             add_individual_to_graph(graph, self.k_plus1_mer_counts_path)
-            pickle.dump(graph, "{}_test_graph.pickle".format(self.uuid))
+            pickle.dump(graph, open(os.path.join(self.paths.out_dir, self.uuid, "{}_individual_graph.pickle".format(self.uuid)), "w"))
+        else:
+            pickle.dump(graph, open(os.path.join(self.paths.out_dir, self.uuid, "{}_graph.pickle".format(self.uuid)), "w"))
         #graph.flag_nodes(open(self.paths.bad_kmers))
         normalizing_kmers = get_normalizing_kmers(self.paths.normalizing, self.ilp_config.kmer_size)
         try:
@@ -57,7 +59,7 @@ class KmerModel(Target):
             out_path = os.path.join(self.paths.out_dir, self.uuid, self.uuid + ".Individual.png")
         else:
             out_path = os.path.join(self.paths.out_dir, self.uuid, self.uuid + ".png")
-        combined_plot(result_dict, raw_counts, graph.paralogs, self.sun_results, self.uuid, out_path)
+        combined_plot(result_dict, raw_counts, graph, self.sun_results, self.uuid, out_path)
 
 
 def get_normalizing_kmers(normalizing_path, kmer_size):
@@ -116,49 +118,36 @@ def add_mole_to_graph(graph, unmasked_mole, masked_mole):
     graph.prune_source_edges()
 
 
-def combined_plot(ilpDict, rawCounts, offsetMap, unfilteredSunDict, uuid, outPath):
+def combined_plot(result_dict, raw_counts, graph, sun_results, uuid, out_path):
     """
     Generates a final combined plot overlaying both ILP and SUN results.
     """
     colors = ["#9b59b6", "#3498db", "#e74c3c", "#34495e", "#2ecc71"]
-    explodedRawCounts = explodeResultDict(rawCounts, offsetMap)
-    explodedData = explodeResultDict(ilpDict, offsetMap)
     # used because the SUN model uses single letter labels
-    paraMap = {"Notch2NL-A": "A", "Notch2NL-B": "B", "Notch2NL-C": "C", "Notch2NL-D": "D", "Notch2": "N"}
-    sortedParalogs = ["Notch2NL-A", "Notch2NL-B", "Notch2NL-C", "Notch2NL-D", "Notch2"]
-    fig, plots = plt.subplots(len(sortedParalogs), sharey=True)
+    para_map = {"Notch2NL-A": "A", "Notch2NL-B": "B", "Notch2NL-C": "C", "Notch2NL-D": "D", "Notch2": "N"}
+    paralogs = graph.paralogs.keys()
+    fig, plots = plt.subplots(len(paralogs), sharey=True)
     plt.yticks((0, 1, 2, 3, 4))
-    plt.suptitle("kmer-DeBruijn ILP and SUN results")
-    maxGap = max(len(x) for x in explodedRawCounts.itervalues())
-    for i, (p, para) in enumerate(izip(plots, sortedParalogs)):
-        data = explodedData[para]
-        rawData = explodedRawCounts[para]
-        windowedRawData = [sum(rawData[k:k+300])/300 for k in xrange(0, len(rawData), 300)]
-        start = offsetMap[para]
-        stop = start + len(data)
-        rounded_max_gap = int(math.ceil(1.0 * maxGap / 10000) * 10000)
+    plt.suptitle("Unitig ILP and SUN results for {}".format(uuid))
+    max_gap = max(stop - start for start, stop in graph.paralogs.itervalues())
+    for i, (p, para) in enumerate(izip(plots, paralogs)):
+        data = result_dict[para]
+        raw_data = raw_counts[para]
+        start, stop = graph.paralogs[para]
+        rounded_max_gap = int(math.ceil(1.0 * max_gap / 10000) * 10000)
         p.axis([start, start + rounded_max_gap, 0, 4])
         x_ticks = [start] + range(start + 20000, start + rounded_max_gap, 20000) + [stop]
         p.axes.set_xticks(x_ticks)
-        p.axes.set_xticklabels([str(start)] + [str(20000 * x) for x in xrange(1, len(x_ticks) - 1)] + [stop])
-        p.fill_between(range(start, stop), data, color=colors[i], alpha=0.8)
-        p.plot(range(start, stop, 300), windowedRawData, alpha=0.8, linewidth=1.5)
-        if len(unfilteredSunDict[paraMap[para]]) > 0:
-            sunPos, sunVals = zip(*unfilteredSunDict[paraMap[para]])
-            p.vlines(np.asarray(sunPos), np.zeros(len(sunPos)), sunVals, color="#E83535")
+        p.axes.set_xticklabels(["{:.3e}".format(start)] + [str(20000 * x) for x in xrange(1, len(x_ticks) - 1)] + ["{:.3e}".format(start)])
+        for (raw_start, raw_stop, raw_val), (start, stop, val) in izip(raw_data, data):
+            p.fill_between(range(start, stop), [val] * (stop - start), color=colors[i], alpha=0.8)
+            p.plot(range(raw_start, raw_stop), [raw_val] * (stop - start), alpha=0.8, linewidth=1.5)
+        if len(sun_results[para_map[para]]) > 0:
+            sun_pos, sun_vals = zip(*sun_results[para_map[para]])
+            p.vlines(np.asarray(sun_pos), np.zeros(len(sun_pos)), sun_vals, color="#E83535")
         for i in range(1, 4):
-            p.axhline(y=i, ls="--", lw=0.8)
+            p.axhline(y=i, ls="--", lw=0.7)
         p.set_title("{}".format(para))
     fig.subplots_adjust(hspace=0.8)
-    plt.savefig(outPath, format="png")
+    plt.savefig(out_path, format="png")
     plt.close()
-
-
-def explodeResultDict(rd, offsetMap):
-    r = defaultdict(list)
-    for para in rd:
-        prevStart = offsetMap[para]
-        for start, span, val in rd[para]:
-            r[para].extend([val] * (start - prevStart))
-            prevStart = start
-    return r

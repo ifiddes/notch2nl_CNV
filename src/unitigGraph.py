@@ -103,7 +103,7 @@ class UnitigGraph(nx.Graph):
         masked_seq should be the same length as unmasked_seq and represent the repeat masked version.
         """
         assert name not in self.paralogs
-        self.paralogs[name] = offset
+        self.paralogs[name] = [offset, offset + len(unmasked_seq)]
         self.paralogs = OrderedDict(sorted(self.paralogs.iteritems(), key=lambda x: x[0]))
         prev_kmer = masked_seq[:self.kmer_size]
         prev_kmer_unmasked = unmasked_seq[:self.kmer_size]
