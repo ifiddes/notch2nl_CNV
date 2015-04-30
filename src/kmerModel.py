@@ -65,8 +65,13 @@ class KmerModel(Target):
         raw_dict = ilp_model.report_normalized_raw_data_map()
         if self.add_individual is True:
             out_path = os.path.join(self.paths.out_dir, self.uuid, self.uuid + ".Individual.png")
+            # debugging code
+            r_d_path = os.path.join(self.paths.out_dir, self.uuid, self.uuid + ".Individual.RawData.pickle")
+            pickle.dump(raw_dict, open(r_d_path, "w"))
         else:
             out_path = os.path.join(self.paths.out_dir, self.uuid, self.uuid + ".png")
+            r_d_path = os.path.join(self.paths.out_dir, self.uuid, self.uuid + ".RawData.pickle")
+            pickle.dump(raw_dict, open(r_d_path, "w"))
         combined_plot(result_dict, raw_dict, graph, self.sun_results, self.uuid, out_path)
 
 
