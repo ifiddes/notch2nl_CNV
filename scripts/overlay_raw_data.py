@@ -80,7 +80,7 @@ def main():
     individual_raw_data = pickle.load(open(args.individual_raw_data))
     mole_raw_data = pickle.load(open(args.mole_raw_data))
     sun_results = pickle.load(open(args.sun_results))
-    path = os.path.join(args.out_dir, args.uuid, args.uuid + "OverlaidRawData.png")
+    path = os.path.join(args.out_dir, args.uuid, args.uuid + ".OverlaidRawData.png")
     overlay_raw_data(mole_raw_data, individual_raw_data, mole_graph, individual_graph, sun_results, args.uuid, path)
 
 
