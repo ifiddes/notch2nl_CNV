@@ -1,5 +1,6 @@
 import os
 import math
+import cPickle as pickle
 from collections import defaultdict
 from itertools import izip
 
@@ -17,7 +18,7 @@ from jobTree.scriptTree.target import Target
 
 class KmerModel(Target):
     def __init__(self, paths, uuid, ilp_config, sun_results, fastq_path, kmer_counts_path, k_plus1_mer_counts_path,
-                 inferred_c, inferred_d):
+                 inferred_c, inferred_d, add_individual):
         Target.__init__(self)
         self.paths = paths
         self.uuid = uuid
@@ -28,12 +29,15 @@ class KmerModel(Target):
         self.k_plus1_mer_counts_path = k_plus1_mer_counts_path
         self.inferred_c = inferred_c
         self.inferred_d = inferred_d
+        self.add_individual = add_individual
 
     def run(self):
         graph = UnitigGraph(kmer_size=self.ilp_config.kmer_size, derived=False)
         add_mole_to_graph(graph, self.paths.unmasked_ref, self.paths.masked_ref)
-        add_individual_to_graph(graph, self.k_plus1_mer_counts_path)
-        graph.flag_nodes(open(self.paths.bad_kmers))
+        if self.add_individual is True:
+            add_individual_to_graph(graph, self.k_plus1_mer_counts_path)
+            pickle.dump(graph, "{}_test_graph.pickle".format(self.uuid))
+        #graph.flag_nodes(open(self.paths.bad_kmers))
         normalizing_kmers = get_normalizing_kmers(self.paths.normalizing, self.ilp_config.kmer_size)
         try:
             assert len(graph.kmers & normalizing_kmers) == 0
@@ -49,7 +53,11 @@ class KmerModel(Target):
         ilp_model.solve()
         result_dict = ilp_model.report_copy_map()
         raw_counts = ilp_model.report_normalized_raw_data_map()
-        combined_plot(result_dict, raw_counts, graph.paralogs, self.sun_results, self.uuid, self.out_dir)
+        if self.add_individual is True:
+            out_path = os.path.join(self.paths.out_dir, self.uuid, self.uuid + ".Individual.png")
+        else:
+            out_path = os.path.join(self.paths.out_dir, self.uuid, self.uuid + ".png")
+        combined_plot(result_dict, raw_counts, graph.paralogs, self.sun_results, self.uuid, out_path)
 
 
 def get_normalizing_kmers(normalizing_path, kmer_size):
@@ -108,7 +116,7 @@ def add_mole_to_graph(graph, unmasked_mole, masked_mole):
     graph.prune_source_edges()
 
 
-def combined_plot(ilpDict, rawCounts, offsetMap, unfilteredSunDict, uuid, outDir):
+def combined_plot(ilpDict, rawCounts, offsetMap, unfilteredSunDict, uuid, outPath):
     """
     Generates a final combined plot overlaying both ILP and SUN results.
     """
@@ -142,7 +150,7 @@ def combined_plot(ilpDict, rawCounts, offsetMap, unfilteredSunDict, uuid, outDir
             p.axhline(y=i, ls="--", lw=0.8)
         p.set_title("{}".format(para))
     fig.subplots_adjust(hspace=0.8)
-    plt.savefig(os.path.join(outDir, uuid + ".combined.png"), format="png")
+    plt.savefig(outPath, format="png")
     plt.close()
 
 

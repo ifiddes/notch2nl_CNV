@@ -80,9 +80,16 @@ class SunModel(Target):
         inferred_c, inferred_d = infer_copy_number(sun_results)
         #self.make_bedgraphs(sun_results)
         pickle.dump(sun_results, open(os.path.join(self.paths.out_dir, self.uuid, "sun_results.pickle"), "w"))
-        self.setFollowOnTarget(KmerModel(self.paths, self.uuid, self.ilp_config, sun_results, self.fastq_path,
-                                         self.kmer_counts_path, self.k_plus1_mer_counts_path, inferred_c, inferred_d))
+        self.setFollowOnTargetFn(kmerModelWrapperFn, args=(self.paths, self.uuid, self.ilp_config, sun_results,
+                                                         self.fastq_path, self.kmer_counts_path, 
+                                                         self.k_plus1_mer_counts_path, inferred_c, inferred_d))
 
+def kmerModelWrapperFn(target, paths, uuid, ilp_config, sun_results, fastq_path, kmer_counts_path, 
+                       k_plus1_mer_counts_path, inferred_c, inferred_d):
+    target.addChildTarget(KmerModel(paths, uuid, ilp_config, sun_results, fastq_path, kmer_counts_path, 
+                                    k_plus1_mer_counts_path, inferred_c, inferred_d, add_individual=True))
+    target.addChildTarget(KmerModel(paths, uuid, ilp_config, sun_results, fastq_path, kmer_counts_path, 
+                                    k_plus1_mer_counts_path, inferred_c, inferred_d, add_individual=False))
 
 def infer_copy_number(sun_results):
     """
