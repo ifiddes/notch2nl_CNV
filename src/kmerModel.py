@@ -5,6 +5,7 @@ from collections import defaultdict
 from itertools import izip
 
 import matplotlib
+
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
@@ -17,6 +18,11 @@ from jobTree.scriptTree.target import Target
 
 
 class KmerModel(Target):
+    """
+    This class acts as a wrapper for the KmerIlpModel. Given the results from the SUN model, and the jellyfish counts
+    containing both k sized kmer counts and k+1 sized kmer counts, this target creates a unitig graph, individualizes
+    it, then passes this graph off to KmerIlpModel for copy number inference.
+    """
     def __init__(self, paths, uuid, ilp_config, sun_results, fastq_path, kmer_counts_path, k_plus1_mer_counts_path,
                  inferred_c, inferred_d, add_individual):
         Target.__init__(self)
@@ -36,10 +42,12 @@ class KmerModel(Target):
         add_mole_to_graph(graph, self.paths.unmasked_ref, self.paths.masked_ref)
         if self.add_individual is True:
             add_individual_to_graph(graph, self.k_plus1_mer_counts_path)
-            pickle.dump(graph, open(os.path.join(self.paths.out_dir, self.uuid, "{}_individual_graph.pickle".format(self.uuid)), "w"))
+            pickle.dump(graph, open(
+                os.path.join(self.paths.out_dir, self.uuid, "{}_individual_graph.pickle".format(self.uuid)), "w"))
         else:
-            pickle.dump(graph, open(os.path.join(self.paths.out_dir, self.uuid, "{}_graph.pickle".format(self.uuid)), "w"))
-        #graph.flag_nodes(open(self.paths.bad_kmers))
+            pickle.dump(graph,
+                        open(os.path.join(self.paths.out_dir, self.uuid, "{}_graph.pickle".format(self.uuid)), "w"))
+        # graph.flag_nodes(open(self.paths.bad_kmers))
         normalizing_kmers = get_normalizing_kmers(self.paths.normalizing, self.ilp_config.kmer_size)
         try:
             assert len(graph.kmers & normalizing_kmers) == 0
@@ -63,6 +71,10 @@ class KmerModel(Target):
 
 
 def get_normalizing_kmers(normalizing_path, kmer_size):
+    """
+    Takes a fasta file containing sequence that will be used to normalize the copy number inference. Generates a set of
+    kmers of size kmer_size for this.
+    """
     normalizing_kmers = set()
     for _, seq in fasta_read(normalizing_path):
         seq = seq.upper()
@@ -74,18 +86,26 @@ def get_normalizing_kmers(normalizing_path, kmer_size):
 
 
 def get_kmer_counts(graph, normalizing_kmers, kmer_counts_file):
-        data_counts = {}
-        normalizing = 0
-        for count, seq in count_reader(kmer_counts_file):
-            if seq in graph.kmers:
-                data_counts[seq] = count
-            elif seq in normalizing_kmers:
-                normalizing += count
-        normalizing /= (1.0 * len(normalizing_kmers))
-        return data_counts, normalizing
+    """
+    Parses a kmer_count file from jellyfish.
+    """
+    data_counts = {}
+    normalizing = 0
+    for count, seq in count_reader(kmer_counts_file):
+        # just in case...
+        assert seq == canonical(seq)
+        if seq in graph.kmers:
+            data_counts[seq] = count
+        elif seq in normalizing_kmers:
+            normalizing += count
+    normalizing /= (1.0 * len(normalizing_kmers))
+    return data_counts, normalizing
 
 
 def add_individual_to_graph(graph, k1mer_counts):
+    """
+    Adds individual sequence to the graph using k+1 kmers.
+    """
     for count, seq in count_reader(k1mer_counts):
         graph.add_individual_sequence(seq)
     graph.prune_individual_edges()
@@ -138,7 +158,8 @@ def combined_plot(result_dict, raw_counts, graph, sun_results, uuid, out_path):
         p.axis([start, start + rounded_max_gap, 0, 4])
         x_ticks = [start] + range(start + 20000, start + rounded_max_gap, 20000) + [stop]
         p.axes.set_xticks(x_ticks)
-        p.axes.set_xticklabels(["{:.3e}".format(start)] + [str(20000 * x) for x in xrange(1, len(x_ticks) - 1)] + ["{:.3e}".format(start)])
+        p.axes.set_xticklabels(
+            ["{:.3e}".format(start)] + [str(20000 * x) for x in xrange(1, len(x_ticks) - 1)] + ["{:.3e}".format(start)])
         for (raw_start, raw_stop, raw_val), (start, stop, val) in izip(raw_data, data):
             p.fill_between(range(start, stop), [val] * (stop - start), color=colors[i], alpha=0.8)
             p.plot(range(raw_start, raw_stop), [raw_val] * (stop - start), alpha=0.8, linewidth=1.5)
