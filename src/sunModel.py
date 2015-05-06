@@ -78,7 +78,7 @@ class SunModel(Target):
     def run(self):
         sun_results = self.find_site_coverages(self.bam_path)
         inferred_c, inferred_d = infer_copy_number(sun_results)
-        #self.make_bedgraphs(sun_results)
+        self.make_bedgraphs(sun_results)
         pickle.dump(sun_results, open(os.path.join(self.paths.out_dir, self.uuid, "sun_results.pickle"), "w"))
         self.setFollowOnTargetFn(kmerModelWrapperFn, args=(self.paths, self.uuid, self.ilp_config, sun_results,
                                                          self.fastq_path, self.kmer_counts_path, 

@@ -73,6 +73,7 @@ class KmerModel(Target):
             r_d_path = os.path.join(self.paths.out_dir, self.uuid, self.uuid + ".RawData.pickle")
             pickle.dump(raw_dict, open(r_d_path, "w"))
         combined_plot(result_dict, raw_dict, graph, self.sun_results, self.uuid, out_path)
+        generate_wiggle_plots(result_dict, raw_dict, graph, self.uuid, out_path)
 
 
 def get_normalizing_kmers(normalizing_path, kmer_size):
@@ -175,6 +176,32 @@ def combined_plot(result_dict, raw_dict, graph, sun_results, uuid, out_path):
     fig.subplots_adjust(hspace=0.8)
     plt.savefig(out_path, format="png")
     plt.close()
+
+
+def generate_wiggle_plots(result_dict, raw_dict, graph, uuid, out_path):
+    """
+    Generates wiggle plots for the UCSC browser on hg38
+    """
+    if not os.path.exists(os.path.join(out_path, uuid, "tracks")):
+        os.mkdir(os.path.join(out_path, uuid, "tracks"))
+    with open(os.path.join(out_path, uuid, "tracks", "{}.ILP.hg38.wiggle".format(uuid)), "w") as outf:
+        outf.write(
+                "track type=wiggle_0 name={} color=35,125,191 autoScale=off visibility=full alwaysZero=on yLineMark=2 "
+                "viewLimits=0:4 yLineOnOff=on maxHeightPixels=100:75:50\n".format(uuid))
+        for para, (start, stop, val) in result_dict.iteritems():
+            outf.write("variableStep chrom=chr1 span={}\n".format(stop - start))
+            outf.write("{} {}\n".format(start, val))
+    with open(os.path.join(out_path, uuid, "tracks", "{}.RawCounts.hg38.wiggle".format(uuid)), "w") as outf:
+        outf.write(
+                "track type=wiggle_0 name={} color=35,125,191 autoScale=off visibility=full alwaysZero=on yLineMark=2 "
+                "viewLimits=0:4 yLineOnOff=on maxHeightPixels=100:75:50\n".format(uuid))
+        for para in raw_dict:
+            raw_data = explode_result(raw_dict[para], graph.paralogs[para])
+            windowed_raw_data = [1.0 * sum(raw_data[k:k + 300]) / 300 for k in xrange(0, len(raw_data), 300)]
+            graph_start, graph_stop = graph.paralogs[para]
+            outf.write("fixedStep chrom=chr1 start={} step=300 span=300\n".format(graph_start))
+            for x in windowed_raw_data:
+                outf.write("{}\n".format(x))
 
 
 def explode_result(result, graph_positions):
