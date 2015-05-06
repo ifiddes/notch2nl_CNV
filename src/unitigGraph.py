@@ -67,13 +67,12 @@ class UnitigGraph(nx.Graph):
             kmer = canonical(seq[i:i + self.kmer_size])
             kmer_canonical = canonical(kmer)
             self.kmers.add(kmer_canonical)
+            self.source_kmers.add(kmer_canonical)
             l, r = labels_from_kmer(kmer_canonical)
-            # should not be possible to have just left or just right
             if self.has_node(l) is not True and self.has_node(r) is not True:
-                assert not(self.has_node(l) or self.has_node(r))
                 self.add_node(l)
                 self.add_node(r)
-                self.add_edge(l, r, count=1, positions=defaultdict(list))
+                self.add_edge(l, r, positions=defaultdict(list))
                 self.edge[l][r]['positions'][name].append(i)
             else:
                 self.edge[l][r]['positions'][name].append(i)
