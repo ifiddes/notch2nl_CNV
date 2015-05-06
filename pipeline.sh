@@ -19,4 +19,4 @@ if [ ! -e ${queries} ]; then
     python src/cgqueryHandler.py --genomes ${genomes} --tissue_types ${tissue_types} --debug_cutoff ${debug_cutoff}
 fi
 
-python src/main.py --cgquery_file ${queries} --jobTree ${jobTree} --maxThreads ${maxThreads} --logLevel DEBUG &> ${log}
+python src/main.py --key_file test.log --cgquery_file ${queries} --jobTree ${jobTree} --maxThreads ${maxThreads} --logLevel DEBUG &> ${log}
