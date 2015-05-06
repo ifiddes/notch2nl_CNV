@@ -44,10 +44,9 @@ def overlay_raw_data(raw_dict, individual_raw_dict, mole_graph, individual_graph
     # used because the SUN model uses single letter labels
     para_map = {"Notch2NL-A": "A", "Notch2NL-B": "B", "Notch2NL-C": "C", "Notch2NL-D": "D", "Notch2": "N"}
     fig, plots = plt.subplots(len(mole_graph.paralogs), sharey=True, figsize=(10.0, 5.0))
-    plt.yticks((0, 1, 2, 3, 4))
-    individual_patch = matplotlib.patches.Patch(color=color_palette[1], fill="true")
-    mole_patch = matplotlib.patches.Patch(color=color_palette[0], fill="true")
-    plt.figlegend((individual_patch, mole_patch), ("Individual", "Mole"), loc='upper right', ncol=5, labelspacing=0.)
+    individual_patch = matplotlib.patches.Patch(color=color_palette[0], fill="true")
+    mole_patch = matplotlib.patches.Patch(color=color_palette[1], fill="true")
+    plt.figlegend((individual_patch, mole_patch), ("Individual", "Mole"), loc='upper right', ncol=2)
     max_gap = max(stop - start for start, stop in mole_graph.paralogs.itervalues())
     for i, (p, para) in enumerate(izip(plots, mole_graph.paralogs.iterkeys())):
         raw_data = explode_result(raw_dict[para], mole_graph.paralogs[para])
@@ -56,9 +55,11 @@ def overlay_raw_data(raw_dict, individual_raw_dict, mole_graph, individual_graph
         rounded_max_gap = int(math.ceil(1.0 * max_gap / 10000) * 10000)
         p.axis([start, start + rounded_max_gap, 0, 4])
         x_ticks = [start] + range(start + 20000, start + rounded_max_gap + 20000, 20000)
+        p.axes.set_yticks(range(5))
+        p.axes.set_yticklabels(map(str, range(5)), fontsize=9)
         p.axes.set_xticks(x_ticks)
         p.axes.set_xticklabels(["{:.3e}".format(start)] + [str(20000 * x) for x in xrange(1, len(x_ticks))])
-        p.plot(range(start, stop, 300), windowed_raw_data, alpha=0.8, color=color_palette[0], linewidth=1.2)
+        p.plot(range(start, stop, 300), windowed_raw_data, alpha=0.8, color=color_palette[1], linewidth=1)
         if len(sun_results[para_map[para]]) > 0:
             sun_pos, sun_vals = zip(*sun_results[para_map[para]])
             p.vlines(np.asarray(sun_pos), np.zeros(len(sun_pos)), sun_vals, color="#E83535", linewidth=0.9, alpha=0.5)
@@ -69,10 +70,10 @@ def overlay_raw_data(raw_dict, individual_raw_dict, mole_graph, individual_graph
         individual_raw_data = explode_result(individual_raw_dict[para], individual_graph.paralogs[para])
         individual_windowed_raw_data = [1.0 * sum(individual_raw_data[k:k + 300]) / 300 for k in xrange(0, len(individual_raw_data), 300)]
         start, stop = individual_graph.paralogs[para]
-        p.plot(range(start, stop, 300), individual_windowed_raw_data, alpha=0.8, color=color_palette[1], linewidth=1.2)
+        p.plot(range(start, stop, 300), individual_windowed_raw_data, alpha=0.8, color=color_palette[0], linewidth=1)
         p.set_title("{}".format(para))    
     fig.subplots_adjust(hspace=0.8)
-    plt.savefig(out_path, format="png", dpi=300, )
+    plt.savefig(out_path, format="png", dpi=300)
     plt.close()    
 
 
