@@ -1,5 +1,7 @@
 import networkx as nx
 import cPickle as pickle
+from itertools import groupby
+from operator import itemgetter
 from collections import defaultdict, OrderedDict
 from src.helperFunctions import remove_label, labels_from_kmer, labels_from_node, canonical
 from jobTree.src.bioio import reverseComplement as reverse_complement
@@ -244,29 +246,26 @@ class UnitigGraph(nx.Graph):
 
     def connected_component_iter(self):
         """
-        Yields connected components.
-
-        TODO: right now this will 'forget' if a kmer came from more than one position.
-        This is not a problem with the base graph at 49bp kmers, but could be for smaller k values.
+        Yields connected components. Each subgraph is rebuilt to represent the kmers present within it.
+        If a subgraph represents more than one source positions, the paralogs property will be updated accordingly.
         """
         for subgraph in nx.connected_component_subgraphs(self):
             # rebuild the kmer set based on this subgraph
             subgraph.kmers = {remove_label(n) for n in subgraph.nodes_iter()}
             # find which of these kmers are source kmers (used to normalize this unitig)
             subgraph.source_kmers = self.source_kmers & subgraph.kmers
-            # now we find the smallest source position for each paralog
-            source_sequence_edges = [[a, b] for a, b in subgraph.edges_iter() if remove_label(a) == remove_label(b)
-                                     and 'positions' in subgraph.edge[a][b]]
+            # build a flat list of all ranges for each paralog
             tmp_map = defaultdict(list)
-            for a, b in source_sequence_edges:
-                for para, positions in subgraph.edge[a][b]['positions'].iteritems():
-                    tmp_map[para].extend(positions)
-            for para, positions in tmp_map.iteritems():
-                # this is where the bug is. Due to repeat masking, we can't know if a break in continuous integers
-                # in position values represents masked gaps or the unitig being represented more than once
-                sorted_positions = sorted(positions)
-                start = self.paralogs[para][0]
-                subgraph.paralogs[para] = [start + sorted_positions[0], start + sorted_positions[-1]]
+            for k in subgraph.source_kmers:
+                l, r = labels_from_kmer(k)
+                if 'positions' not in subgraph.edge[l][r]:
+                    continue
+                for para, vals in subgraph.edge[l][r]['positions'].iteritems():
+                    tmp_map[para].extend(vals)
+            for para, data in tmp_map.iteritems():
+                data = sorted(data)
+                ranges = [map(itemgetter(1), g) for k, g in groupby(enumerate(data), lambda (i, x):i - x)]
+                subgraph.paralogs[para] = [[x[0], x[-1]] for x in ranges]
             subgraph.paralogs = OrderedDict(sorted(subgraph.paralogs.iteritems(), key=lambda x: x[0]))
             yield subgraph
 

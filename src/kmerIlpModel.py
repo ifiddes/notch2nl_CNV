@@ -19,16 +19,17 @@ class Block(object):
         # adjust the kmer set to remove kmers flagged as bad
         self.kmers = set()
         for k in subgraph.kmers:
-            l, r = labels_from_kmer(k)
+            #l, r = labels_from_kmer(k)
             #if 'bad' not in subgraph.edge[l][r]:
             self.kmers.add(k)
-        for para, (start, stop) in subgraph.paralogs.iteritems():
-            if len(self.kmers) > 0:
-                self.variable_map[(para, start, stop)] = pulp.LpVariable("{}_{}".format(para, start), 
-                                                                         lowBound=min_ploidy, upBound=max_ploidy, 
-                                                                         cat="Integer")
-            else:
-                self.variable_map[(para, start, stop)] = None
+        for para in subgraph.paralogs:
+            for start, stop in subgraph.paralogs[para]:
+                if len(self.kmers) > 0:
+                    self.variable_map[(para, start, stop)] = pulp.LpVariable("{}_{}".format(para, start),
+                                                                             lowBound=min_ploidy, upBound=max_ploidy,
+                                                                             cat="Integer")
+                else:
+                    self.variable_map[(para, start, stop)] = None
 
     def __len__(self):
         return self._size
@@ -152,6 +153,8 @@ class KmerIlpModel(SequenceGraphLpProblem):
         for para in self.block_map:
             for i in xrange(len(self.block_map[para])):
                 start, stop, var, block = self.block_map[para][i]
+                start += self.UnitigGraph.paralogs[para][0]
+                stop += self.UnitigGraph.paralogs[para][0]
                 if var is not None:
                     copy_map[para].append([start, stop, block.adjusted_count / len(block.variables)])
                     prev_var = block.adjusted_count / len(block.variables)
@@ -167,6 +170,8 @@ class KmerIlpModel(SequenceGraphLpProblem):
         for para in self.block_map:
             for i in xrange(len(self.block_map[para])):
                 start, stop, var, block = self.block_map[para][i]
+                start += self.UnitigGraph.paralogs[para][0]
+                stop += self.UnitigGraph.paralogs[para][0]
                 if var is not None:
                     copy_map[para].append([start, stop, pulp.value(var)])
                     prev_var = pulp.value(var)

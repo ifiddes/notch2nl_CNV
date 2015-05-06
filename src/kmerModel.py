@@ -83,7 +83,7 @@ class KmerModel(Target):
             r_d_path = os.path.join(self.paths.out_dir, self.uuid, self.uuid + ".RawData.pickle")
             pickle.dump(raw_dict, open(r_d_path, "w"))
         combined_plot(result_dict, raw_dict, graph, self.sun_results, self.uuid, out_png_path)
-        generate_wiggle_plots(result_dict, raw_dict, graph, self.uuid, out_raw_path, out_ilp_path)
+        generate_wiggle_plots(result_dict, raw_dict, self.uuid, out_raw_path, out_ilp_path)
 
 
 def get_normalizing_kmers(normalizing_path, kmer_size):
@@ -179,7 +179,7 @@ def combined_plot(result_dict, raw_dict, graph, sun_results, uuid, out_path):
     plt.close()
 
 
-def generate_wiggle_plots(result_dict, raw_dict, graph, uuid, out_raw_path, out_ilp_path):
+def generate_wiggle_plots(result_dict, raw_dict, uuid, out_raw_path, out_ilp_path):
     """
     Generates wiggle plots for the UCSC browser on hg38
     """
