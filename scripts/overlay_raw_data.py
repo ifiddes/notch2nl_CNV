@@ -40,7 +40,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def overlay_raw_data(raw_dict, individual_raw_dict, mole_graph, individual_graph, sun_results, uuid, out_path):
+def overlay_raw_data(raw_dict, individual_raw_dict, mole_graph, individual_graph, sun_results, out_path):
     # used because the SUN model uses single letter labels
     para_map = {"Notch2NL-A": "A", "Notch2NL-B": "B", "Notch2NL-C": "C", "Notch2NL-D": "D", "Notch2": "N"}
     fig, plots = plt.subplots(len(mole_graph.paralogs), sharey=True, figsize=(10.0, 5.0))
@@ -70,7 +70,7 @@ def overlay_raw_data(raw_dict, individual_raw_dict, mole_graph, individual_graph
         individual_windowed_raw_data = [1.0 * sum(individual_raw_data[k:k + 300]) / 300 for k in xrange(0, len(individual_raw_data), 300)]
         start, stop = individual_graph.paralogs[para]
         p.plot(range(start, stop, 300), individual_windowed_raw_data, alpha=0.8, color=color_palette[1], linewidth=1.2)
-        p.set_title("{}".format(para))    
+        p.set_title("{}".format(para))
     fig.subplots_adjust(hspace=0.8)
     plt.savefig(out_path, format="png", dpi=300, )
     plt.close()    
@@ -97,7 +97,7 @@ def main():
     mole_raw_data = pickle.load(open(args.mole_raw_data))
     sun_results = pickle.load(open(args.sun_results))
     path = os.path.join(args.out_dir, args.uuid, args.uuid + ".OverlaidRawData.png")
-    overlay_raw_data(mole_raw_data, individual_raw_data, mole_graph, individual_graph, sun_results, args.uuid, path)
+    overlay_raw_data(mole_raw_data, individual_raw_data, mole_graph, individual_graph, sun_results, path)
 
 
 if __name__ == "__main__":
