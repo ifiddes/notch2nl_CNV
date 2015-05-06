@@ -25,7 +25,7 @@ class SunModel(Target):
         wl_list = [x.split() for x in open(paths.whitelist) if not x.startswith("#")]
         # dict mapping genome positions to which paralog has a SUN at that position
         self.whitelist = {int(hg19_pos): (para, ref, alt, hg38_pos) for para, hg19_pos, ref, alt, hg38_pos in wl_list}
-        
+
     def find_site_coverages(self, bam_in, min_depth=20):
         """
         Runs mpileup on each SUN position and finds allele fractions
@@ -73,7 +73,7 @@ class SunModel(Target):
                           "viewLimits=0:4 yLineOnOff=on maxHeightPixels=100:75:50\n")
             outf.write(bed_header.format(self.uuid))
             for pos, val in sorted_merged_results:
-                outf.write("\t".join(map(str, ["chr1", pos, pos + 1, val])) + "\n")
+                outf.write("\t".join(map(str, ["chr1", pos, int(pos) + 1, val])) + "\n")
 
     def run(self):
         sun_results = self.find_site_coverages(self.bam_path)
@@ -81,8 +81,9 @@ class SunModel(Target):
         self.make_bedgraphs(sun_results)
         pickle.dump(sun_results, open(os.path.join(self.paths.out_dir, self.uuid, "sun_results.pickle"), "w"))
         self.setFollowOnTargetFn(kmerModelWrapperFn, args=(self.paths, self.uuid, self.ilp_config, sun_results,
-                                                         self.fastq_path, self.kmer_counts_path, 
-                                                         self.k_plus1_mer_counts_path, inferred_c, inferred_d))
+                                                           self.fastq_path, self.kmer_counts_path,
+                                                           self.k_plus1_mer_counts_path, inferred_c, inferred_d))
+
 
 def kmerModelWrapperFn(target, paths, uuid, ilp_config, sun_results, fastq_path, kmer_counts_path, 
                        k_plus1_mer_counts_path, inferred_c, inferred_d):
@@ -90,6 +91,7 @@ def kmerModelWrapperFn(target, paths, uuid, ilp_config, sun_results, fastq_path,
                                     k_plus1_mer_counts_path, inferred_c, inferred_d, add_individual=True))
     target.addChildTarget(KmerModel(paths, uuid, ilp_config, sun_results, fastq_path, kmer_counts_path, 
                                     k_plus1_mer_counts_path, inferred_c, inferred_d, add_individual=False))
+
 
 def infer_copy_number(sun_results):
     """

@@ -23,6 +23,7 @@ class KmerModel(Target):
     containing both k sized kmer counts and k+1 sized kmer counts, this target creates a unitig graph, individualizes
     it, then passes this graph off to KmerIlpModel for copy number inference.
     """
+
     def __init__(self, paths, uuid, ilp_config, sun_results, fastq_path, kmer_counts_path, k_plus1_mer_counts_path,
                  inferred_c, inferred_d, add_individual):
         Target.__init__(self)
@@ -186,15 +187,15 @@ def generate_wiggle_plots(result_dict, raw_dict, graph, uuid, out_path):
         os.mkdir(os.path.join(out_path, uuid, "tracks"))
     with open(os.path.join(out_path, uuid, "tracks", "{}.ILP.hg38.wiggle".format(uuid)), "w") as outf:
         outf.write(
-                "track type=wiggle_0 name={} color=35,125,191 autoScale=off visibility=full alwaysZero=on yLineMark=2 "
-                "viewLimits=0:4 yLineOnOff=on maxHeightPixels=100:75:50\n".format(uuid))
+            "track type=wiggle_0 name={} color=35,125,191 autoScale=off visibility=full alwaysZero=on "
+            "yLineMark=2 viewLimits=0:4 yLineOnOff=on maxHeightPixels=100:75:50\n".format(uuid))
         for para, (start, stop, val) in result_dict.iteritems():
             outf.write("variableStep chrom=chr1 span={}\n".format(stop - start))
             outf.write("{} {}\n".format(start, val))
     with open(os.path.join(out_path, uuid, "tracks", "{}.RawCounts.hg38.wiggle".format(uuid)), "w") as outf:
         outf.write(
-                "track type=wiggle_0 name={} color=35,125,191 autoScale=off visibility=full alwaysZero=on yLineMark=2 "
-                "viewLimits=0:4 yLineOnOff=on maxHeightPixels=100:75:50\n".format(uuid))
+            "track type=wiggle_0 name={} color=35,125,191 autoScale=off visibility=full alwaysZero=on "
+            "yLineMark=2 viewLimits=0:4 yLineOnOff=on maxHeightPixels=100:75:50\n".format(uuid))
         for para in raw_dict:
             raw_data = explode_result(raw_dict[para], graph.paralogs[para])
             windowed_raw_data = [1.0 * sum(raw_data[k:k + 300]) / 300 for k in xrange(0, len(raw_data), 300)]
