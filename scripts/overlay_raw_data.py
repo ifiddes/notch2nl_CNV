@@ -10,8 +10,6 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 
-from src.unitigGraph import UnitigGraph
-
 color_palette = [( 93, 165, 218),  # m blue
                  (250, 164,  58),  # m orange
                  ( 96, 189, 104),  # m green

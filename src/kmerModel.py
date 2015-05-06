@@ -192,25 +192,22 @@ def generate_wiggle_plots(result_dict, raw_dict, graph, uuid, out_raw_path, out_
     """
     Generates wiggle plots for the UCSC browser on hg38
     """
-    if not os.path.exists(os.path.join(out_path, uuid, "tracks")):
-        os.mkdir(os.path.join(out_path, uuid, "tracks"))
     with open(out_ilp_path, "w") as outf:
         outf.write(
             "track type=wiggle_0 name={} color=35,125,191 autoScale=off visibility=full alwaysZero=on "
             "yLineMark=2 viewLimits=0:4 yLineOnOff=on maxHeightPixels=100:75:50\n".format(uuid))
-        for para, (start, stop, val) in result_dict.iteritems():
-            outf.write("variableStep chrom=chr1 span={}\n".format(stop - start))
-            outf.write("{} {}\n".format(start, val))
+        for para in result_dict:
+            for start, stop, val in result_dict[para]:
+                outf.write("variableStep chrom=chr1 span={}\n".format(stop - start))
+                outf.write("{} {}\n".format(start, val))
     with open(out_raw_path, "w") as outf:
         outf.write(
             "track type=wiggle_0 name={} color=35,125,191 autoScale=off visibility=full alwaysZero=on "
             "yLineMark=2 viewLimits=0:4 yLineOnOff=on maxHeightPixels=100:75:50\n".format(uuid))
         for para in raw_dict:
-            raw_data = explode_result(raw_dict[para], graph.paralogs[para])
-            graph_start, graph_stop = graph.paralogs[para]
-            outf.write("fixedStep chrom=chr1 start={} step=300 span=300\n".format(graph_start))
-            for x in windowed_raw_data:
-                outf.write("{}\n".format(x))
+            for start, stop, val in raw_dict[para]:
+                outf.write("variableStep chrom=chr1 span={}\n".format(stop - start))
+                outf.write("{} {}\n".format(start, val))
 
 
 def explode_result(result, graph_positions):
