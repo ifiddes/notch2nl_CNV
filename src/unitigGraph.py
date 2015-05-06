@@ -32,33 +32,8 @@ class UnitigGraph(nx.Graph):
         self.kmers = set()
         self.source_kmers = set()
         if derived is False:
-            # masked kmers stores kmers that were repeat masked and should be ignored in individual data
-            self.masked_kmers = set()
             # these are edges that were pruned from the source graph and should NOT be re-introduced by the individual
             self.bad_source_edges = set()
-
-    def _build_source_nodes(self, kmer, pos, name):
-        """
-        Takes a kmer, and adds it to the graph, constructing a sequence edge for the kmer.
-        Returns the canonical representation of this kmer.
-        """
-        kmer_canonical = canonical(kmer)
-        l, r = labels_from_kmer(kmer_canonical)
-        # keep track of the graph as it grows and make sure its always an even # of nodes
-        prev_size = len(self)
-        if self.has_node(l) is not True and self.has_node(r) is not True:
-            # should not be possible to have just left or just right
-            assert not (self.has_node(l) or self.has_node(r))
-            self.add_node(l)
-            self.add_node(r)
-            self.add_edge(l, r, positions=defaultdict(list))
-            self.edge[l][r]['positions'][name].append(pos)
-            assert prev_size + 2 == len(self)
-        else:
-            self.edge[l][r]['positions'][name].append(pos)
-            assert prev_size == len(self)
-        self.kmers.add(kmer_canonical)
-        self.source_kmers.add(kmer_canonical)
 
     def _determine_orientation(self, prev, prev_canonical, kmer, kmer_canonical):
         if prev == prev_canonical:
@@ -79,58 +54,39 @@ class UnitigGraph(nx.Graph):
                 l, r = reverse_complement(prev) + "_L", reverse_complement(kmer) + "_R"
         return l, r
 
-    def _add_source_adjacency(self, prev_kmer, kmer):
+    def add_source_sequence(self, name, offset, seq):
         """
-        Adds L/R nodes, sequence edge and adjacency edge to the graph
-        """
-        prev_kmer_canonical = canonical(prev_kmer)
-        kmer_canonical = canonical(kmer)
-        # make sure we aren't adding edges - they should already exist now
-        prev_kmer_size = len(self)
-        l, r = self._determine_orientation(prev_kmer, prev_kmer_canonical, kmer, kmer_canonical)
-        self.add_edge(l, r)
-        self.edge[l][r]['source'] = True
-        # no new nodes should be created in this process
-        assert prev_kmer_size == len(self), (prev_kmer, kmer)
-
-    def add_masked_kmers(self, masked_seq, unmasked_seq):
-        for i in xrange(len(masked_seq) - self.kmer_size + 1):
-            if "N" in masked_seq[i:i + self.kmer_size]:
-                self.masked_kmers.add(canonical(unmasked_seq[i:i + self.kmer_size]))
-
-    def add_source_sequence(self, name, offset, masked_seq, unmasked_seq):
-        """
-        masked_seq should be the same length as unmasked_seq and represent the repeat masked version.
+        Add source sequence to the graph. Should be unmasked sequence.
         """
         assert name not in self.paralogs
-        self.paralogs[name] = [offset, offset + len(unmasked_seq)]
+        self.paralogs[name] = [offset, offset + len(seq)]
         self.paralogs = OrderedDict(sorted(self.paralogs.iteritems(), key=lambda x: x[0]))
-        prev_kmer = masked_seq[:self.kmer_size]
-        prev_kmer_unmasked = unmasked_seq[:self.kmer_size]
-        prev_pos = 0
-        start_flag = False
-        for i in xrange(1, len(masked_seq) - self.kmer_size + 1):
-            kmer = masked_seq[i:i + self.kmer_size]
-            kmer_unmasked = unmasked_seq[i:i + self.kmer_size]
-            if canonical(prev_kmer_unmasked) in self.masked_kmers:
-                prev_kmer = kmer
-                prev_kmer_unmasked = kmer_unmasked
-                prev_pos = i
-                continue
-            elif canonical(kmer_unmasked) in self.masked_kmers:
-                continue
+        prev_kmer = None
+        prev_canonical = None
+        for i in xrange(len(seq) - self.kmer_size + 1):
+            kmer = canonical(seq[i:i + self.kmer_size])
+            kmer_canonical = canonical(kmer)
+            self.kmers.add(kmer_canonical)
+            l, r = labels_from_kmer(kmer_canonical)
+            # should not be possible to have just left or just right
+            if self.has_node(l) is not True and self.has_node(r) is not True:
+                assert not(self.has_node(l) or self.has_node(r))
+                self.add_node(l)
+                self.add_node(r)
+                self.add_edge(l, r, count=1, positions=defaultdict(list))
+                self.edge[l][r]['positions'][name].append(i)
             else:
-                if start_flag is False:
-                    self._build_source_nodes(prev_kmer, prev_pos, name)
-                    start_flag = True
-                prev_kmer = masked_seq[prev_pos:prev_pos + self.kmer_size]
-                assert "N" not in prev_kmer and "N" not in kmer, (prev_pos, prev_kmer, i, kmer)
-                self._build_source_nodes(kmer, i, name)
-                self._add_source_adjacency(prev_kmer, kmer)
+                self.edge[l][r]['positions'][name].append(i)
+            assert len(self) % 2 == 0
+            if prev_kmer is None:
                 prev_kmer = kmer
-                prev_kmer_unmasked = kmer_unmasked
-                prev_pos = i
-        assert len(self.masked_kmers & self.kmers) == 0
+                prev_canonical = kmer_canonical
+                continue
+            l, r = self._determine_orientation(prev_kmer, prev_canonical, kmer, kmer_canonical)
+            self.add_edge(l, r)
+            self.edge[l][r]['source'] = True
+            prev_kmer = kmer
+            prev_canonical = kmer_canonical
 
     def add_individual_sequence(self, seq):
         """
@@ -140,22 +96,21 @@ class UnitigGraph(nx.Graph):
         prev, kmer = seq[:-1], seq[1:]
         prev_canonical = canonical(prev)
         kmer_canonical = canonical(kmer)
-        if prev_canonical not in self.masked_kmers and kmer_canonical not in self.masked_kmers:
-            # do not add individual sequence that were originally masked in the kmer masking procedure
-            l, r = self._determine_orientation(prev, prev_canonical, kmer, kmer_canonical)
-            if frozenset(sorted([l, r])) not in self.bad_source_edges:
-                for k in [prev_canonical, kmer_canonical]:
-                    a, b = labels_from_kmer(k)
-                    if self.has_node(a) is not True and self.has_node(b) is not True:
-                        # should not be possible to have just left or just right
-                        assert not (self.has_node(a) or self.has_node(b))
-                        self.add_node(a)
-                        self.add_node(b)
-                        # add sequence edge without any tags
-                        self.add_edge(a, b)
-                # build adjacency edge
-                self.add_edge(l, r)
-                self.kmers.update([prev_canonical, kmer_canonical])
+        # do not add individual sequence that were originally masked in the kmer masking procedure
+        l, r = self._determine_orientation(prev, prev_canonical, kmer, kmer_canonical)
+        if frozenset(sorted([l, r])) not in self.bad_source_edges:
+            for k in [prev_canonical, kmer_canonical]:
+                a, b = labels_from_kmer(k)
+                if self.has_node(a) is not True and self.has_node(b) is not True:
+                    # should not be possible to have just left or just right
+                    assert not (self.has_node(a) or self.has_node(b))
+                    self.add_node(a)
+                    self.add_node(b)
+                    # add sequence edge without any tags
+                    self.add_edge(a, b)
+            # build adjacency edge
+            self.add_edge(l, r)
+            self.kmers.update([prev_canonical, kmer_canonical])
 
     def prune_source_edges(self):
         """
