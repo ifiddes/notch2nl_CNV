@@ -71,7 +71,7 @@ class KmerModel(Target):
             out_ilp_path = os.path.join(self.paths.out_dir, self.uuid, "tracks",
                                         "{}.Individual.ILP.hg38.wiggle".format(self.uuid))
             # debugging code
-            r_d_path = os.path.join(self.paths.out_dir, self.uuid, self.uuid + ".Individual.RawData.pickle")
+            r_d_path = os.path.join(self.paths.out_dir, self.uuid, self.uuid + ".RawData.pickle")
             pickle.dump(raw_dict, open(r_d_path, "w"))
         else:
             out_png_path = os.path.join(self.paths.out_dir, self.uuid, self.uuid + ".png")
