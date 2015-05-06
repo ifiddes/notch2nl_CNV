@@ -309,7 +309,7 @@ class UnitigGraph(nx.Graph):
                     tmp_map[para].extend(positions)
             for para, positions in tmp_map.iteritems():
                 # this is where the bug is. Due to repeat masking, we can't know if a break in continuous integers
-                # in position values represents masked gaps or the kmer being represented more than once
+                # in position values represents masked gaps or the unitig being represented more than once
                 sorted_positions = sorted(positions)
                 start = self.paralogs[para][0]
                 subgraph.paralogs[para] = [start + sorted_positions[0], start + sorted_positions[-1]]
