@@ -72,7 +72,9 @@ class KmerModel(Target):
                                         "{}.Individual.ILP.hg38.wiggle".format(self.uuid))
             # debugging code
             r_d_path = os.path.join(self.paths.out_dir, self.uuid, self.uuid + ".Individual.RawData.pickle")
+            ilp_model_path = os.path.join(self.paths.out_dir, self.uuid, self.uuid + ".Individual.IlpModel.pickle")
             pickle.dump(raw_dict, open(r_d_path, "w"))
+            pickle.dump(ilp_model, open(ilp_model_path, "w"))
         else:
             out_png_path = os.path.join(self.paths.out_dir, self.uuid, self.uuid + ".png")
             out_raw_path = os.path.join(self.paths.out_dir, self.uuid, "tracks",
@@ -81,7 +83,9 @@ class KmerModel(Target):
                                         "{}.ILP.hg38.wiggle".format(self.uuid))
             # debugging code
             r_d_path = os.path.join(self.paths.out_dir, self.uuid, self.uuid + ".RawData.pickle")
+            ilp_model_path = os.path.join(self.paths.out_dir, self.uuid, self.uuid + ".IlpModel.pickle")
             pickle.dump(raw_dict, open(r_d_path, "w"))
+            pickle.dump(ilp_model, open(ilp_model_path, "w"))
         combined_plot(result_dict, raw_dict, graph, self.sun_results, self.uuid, out_png_path)
         generate_wiggle_plots(result_dict, raw_dict, out_raw_path, out_ilp_path)
 
