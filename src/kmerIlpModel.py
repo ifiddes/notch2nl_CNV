@@ -153,8 +153,8 @@ class KmerIlpModel(SequenceGraphLpProblem):
         for para in self.block_map:
             for i in xrange(len(self.block_map[para])):
                 start, stop, var, block = self.block_map[para][i]
-                start += self.UnitigGraph.paralogs[para][0]
-                stop += self.UnitigGraph.paralogs[para][0]
+                start += self.graph.paralogs[para][0]
+                stop += self.graph.paralogs[para][0]
                 if var is not None:
                     copy_map[para].append([start, stop, block.adjusted_count / len(block.variables)])
                     prev_var = block.adjusted_count / len(block.variables)
@@ -170,8 +170,8 @@ class KmerIlpModel(SequenceGraphLpProblem):
         for para in self.block_map:
             for i in xrange(len(self.block_map[para])):
                 start, stop, var, block = self.block_map[para][i]
-                start += self.UnitigGraph.paralogs[para][0]
-                stop += self.UnitigGraph.paralogs[para][0]
+                start += self.graph.paralogs[para][0]
+                stop += self.graph.paralogs[para][0]
                 if var is not None:
                     copy_map[para].append([start, stop, pulp.value(var)])
                     prev_var = pulp.value(var)

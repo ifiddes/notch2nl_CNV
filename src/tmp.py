@@ -115,13 +115,23 @@ from src.kmerIlpModel import *
 import cPickle as pickle
 #fastq_path = "/hive/users/ifiddes/notch_mike_snyder/snyder_notch.50mer.Counts.fa"
 #fastq_path = "/Users/ifiddes/hive/notch_mike_snyder/snyder_notch.50mer.Counts.fa"
-fastq_path = "/home/ifiddes/hive/notch_mike_snyder/snyder_notch.50mer.Counts.fa"
+fastq_path = "output/mike_sny/mike_sny.50mer.fa"
 ref_path = "data/kmer_model_data/notch2nl_unmasked_hg38.fa"
 graph = UnitigGraph(kmer_size=49, derived=False)
 add_mole_to_graph(graph, ref_path)
 add_individual_to_graph(graph, fastq_path)
 ilp_model = KmerIlpModel(graph)
 normalizing_kmers = get_normalizing_kmers("data/kmer_model_data/normalizing.fa", 49)
-data_counts, normalizing = get_kmer_counts(graph, normalizing_kmers, "/home/ifiddes/hive/notch2nl_CNV/output/mike_sny/mike_sny.49mer.fa")
+data_counts, normalizing = get_kmer_counts(graph, normalizing_kmers, "output/mike_sny/mike_sny.49mer.fa")
 ilp_model.introduce_data(data_counts, normalizing)
-
+raw_dict = ilp_model.report_normalized_raw_data_map()
+uuid = "test"
+out_raw_path = "test.wiggle"
+with open(out_raw_path, "w") as outf:
+    outf.write(
+        "track type=wiggle_0 name={} color=35,125,191 autoScale=off visibility=full alwaysZero=on "
+        "yLineMark=2 viewLimits=0:4 yLineOnOff=on maxHeightPixels=100:75:50\n".format(uuid))
+    for para in raw_dict:
+        for start, stop, val in raw_dict[para]:
+            outf.write("variableStep chrom=chr1 span={}\n".format(stop - start))
+            outf.write("{} {}\n".format(start, val))
