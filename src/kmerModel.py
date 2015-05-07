@@ -184,17 +184,17 @@ def generate_wiggle_plots(result_dict, raw_dict, uuid, out_raw_path, out_ilp_pat
     Generates wiggle plots for the UCSC browser on hg38
     """
     with open(out_ilp_path, "w") as outf:
-        outf.write(
-            "track type=wiggle_0 name={} color=35,125,191 autoScale=off visibility=full alwaysZero=on "
-            "yLineMark=2 viewLimits=0:4 yLineOnOff=on maxHeightPixels=100:75:50\n".format(uuid))
+        #outf.write(
+        #    "track type=wiggle_0 name={} color=35,125,191 autoScale=off visibility=full alwaysZero=on "
+        #    "yLineMark=2 viewLimits=0:4 yLineOnOff=on maxHeightPixels=100:75:50\n".format(uuid))
         for para in result_dict:
             for start, stop, val in result_dict[para]:
                 outf.write("variableStep chrom=chr1 span={}\n".format(stop - start))
                 outf.write("{} {}\n".format(start, val))
     with open(out_raw_path, "w") as outf:
-        outf.write(
-            "track type=wiggle_0 name={} color=35,125,191 autoScale=off visibility=full alwaysZero=on "
-            "yLineMark=2 viewLimits=0:4 yLineOnOff=on maxHeightPixels=100:75:50\n".format(uuid))
+        #outf.write(
+        #    "track type=wiggle_0 name={} color=35,125,191 autoScale=off visibility=full alwaysZero=on "
+        #    "yLineMark=2 viewLimits=0:4 yLineOnOff=on maxHeightPixels=100:75:50\n".format(uuid))
         for para in raw_dict:
             for start, stop, val in raw_dict[para]:
                 outf.write("variableStep chrom=chr1 span={}\n".format(stop - start))

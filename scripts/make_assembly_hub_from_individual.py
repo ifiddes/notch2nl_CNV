@@ -8,8 +8,7 @@ import os
 import argparse
 import subprocess
 
-colors = {"ILP": "242,148,176", "SUN": "191,191,191", "RawCounts": "137,137,137", "RawIndividual": "164,239,245"}
-paths = namedtuple("paths", "individual_ilp, individual_raw, raw, sun")
+colors = {"ILP": "242,148,176", "SUN": "180,0,0", "Raw": "194,194,143", "RawIndividual": "143,162,194"}
 
 
 def parse_args():
@@ -23,15 +22,17 @@ def parse_args():
 
 
 def start_hub(dir_path, name):
+    if not os.path.exists(dir_path):
+        os.mkdir(dir_path)
     with open(os.path.join(dir_path, "hub.txt"), "w") as outf:
-        hub_str = "hub {}\nshortLabel {}\nlongLabel {}\ngenomesFile genomes.txt\nemail ian.t.fiddes@gmail.com\n"
+        hub_str = "hub {0}\nshortLabel {0}\nlongLabel {0}\ngenomesFile genomes.txt\nemail ian.t.fiddes@gmail.com\n"
         outf.write(hub_str.format(name, name + " Notch2NL", name + " Notch2NL"))
     with open(os.path.join(dir_path, "genomes.txt"), "w") as outf:
         outf.write("genome hg38\ntrackDb hg38/trackDb.txt\ndefaultPos chr1:145987622-149723055\n\n")
     if not os.path.exists(os.path.join(dir_path, "hg38")):
         os.mkdir(os.path.join(dir_path, "hg38"))
     with open(os.path.join(dir_path, "hg38", "Notch2NL.html"), "w") as outf:
-        outf.write("Notch2NL {}\n".format(name))
+        outf.write("Notch2NL {0}\n".format(name))
 
 
 def track_db(out_dir, uuid):
@@ -41,38 +42,44 @@ def track_db(out_dir, uuid):
     2) raw: overlays individual raw and raw
     3) ILP: overlays individual ILP result with individual raw data and SUN information
     """
-    container = ("track {0}_{1}\ncontainer multiWig\nshortLabel {0} all\nlongLabel Individual Raw/Raw/SUN Combined\n"
+    container = ("track {0}_{1}\ncontainer multiWig\nshortLabel {0}_{1}\nlongLabel {2} Combined\n"
                  "type bigWig 0 4\nautoScale off\nvisibility full\nalwaysZero on\nyLineMark 2\nviewLimits 0:4\n"
-                  "yLineOnOff on\nmaxHeightPixels 100:75:50\n")
-    all = ("track {}_ind_raw_1\nshortLabel {}_ind_raw\nlongLabel {}_ind_raw\ntype bigWig 0 4\nparent {}_all\n"
-            "bigDataUrl {}.Individual.RawCounts.hg38.bw\n")
-    all += ("track {}_raw_1\nshortLabel {}_raw\nlongLabel {}_raw\ntype bigWig 0 4\nparent {}_all"
-            "bigDataUrl {}.Individual.RawCounts.hg38.bw\n")
-    all += ("track {}_sun_1\nshortLabel {}_sun\nlongLabel {}_sun\ntype bigWig 0 4\nparent {}_all"
-            "bigDataUrl {}.sun_model.hg38.bedGraph\n")
+                  "yLineOnOff on\nmaxHeightPixels 100:75:50\n\n")
+    all = ("track {0}_ind_raw_1\nshortLabel {0}_ind_raw\nlongLabel {0}_ind_raw\ntype bigWig 0 4\nparent {0}_all\n"
+           "bigDataUrl {0}.Individual.RawCounts.hg38.wiggle\ncolor {RawIndividual}\n\n"
+           "track {0}_raw_1\nshortLabel {0}_raw\nlongLabel {0}_raw\ntype bigWig 0 4\nparent {0}_all\n"
+           "bigDataUrl {0}.RawCounts.hg38.wiggle\ncolor {Raw}\n\n"
+           "track {0}_sun_1\nshortLabel {0}_sun\nlongLabel {0}_sun\ntype bigWig 0 4\nparent {0}_all\n"
+           "bigDataUrl {0}.sun_model.hg38.bedGraph\ncolor {SUN}\n\n")
 
-    raw = ("track {}_ind_raw_2\nshortLabel {}_ind_raw\nlongLabel {}_ind_raw\ntype bigWig 0 4\nparent {}_raw\n"
-            "bigDataUrl {}.Individual.RawCounts.hg38.bw\n")
-    raw += ("track {}_raw_2\nshortLabel {}_raw\nlongLabel {}_raw\ntype bigWig 0 4\nparent {}_all"
-            "bigDataUrl {}.RawCounts.hg38.bw\n")
+    raw = ("track {0}_ind_raw_2\nshortLabel {0}_ind_raw\nlongLabel {0}_ind_raw\ntype bigWig 0 4\nparent {0}_raw\n"
+           "bigDataUrl {0}.Individual.RawCounts.hg38.wiggle\ncolor {RawIndividual}\n\n"
+           "track {0}_raw_2\nshortLabel {0}_raw\nlongLabel {0}_raw\ntype bigWig 0 4\nparent {0}_all\n"
+           "bigDataUrl {0}.RawCounts.hg38.wiggle\ncolor {Raw}\n\n")
 
-    ilp = ("track {}_ind_raw_3\nshortLabel {}_ind_raw\nlongLabel {}_ind_raw\ntype bigWig 0 4\nparent {}_raw\n"
-           "bigDataUrl {}.Individual.RawCounts.hg38.bw")
-    ilp += ("track {}_ilp\nshortLabel {}_raw\nlongLabel {}_raw\ntype bigWig 0 4\nparent {}_all"
-            "bigDataUrl {}.ILP.hg38.bw")
-    ilp += ("track {}_sun_1\nshortLabel {}_sun\nlongLabel {}_sun\ntype bigWig 0 4\nparent {}_all"
-            "bigDataUrl {}.sun_model.hg38.bedGraph")
+    ilp = ("track {0}_ind_raw_3\nshortLabel {0}_ind_raw\nlongLabel {0}_ind_raw\ntype bigWig 0 4\nparent {0}_raw\n"
+           "bigDataUrl {0}.Individual.RawCounts.hg38.wiggle\ncolor {RawIndividual}\n\n"
+           "track {0}_ilp_1\nshortLabel {0}_raw\nlongLabel {0}_raw\ntype bigWig 0 4\nparent {0}_all\n"
+           "bigDataUrl {0}.ILP.hg38.wiggle\ncolor {ILP}\n\n"
+           "track {0}_sun_1\nshortLabel {0}_sun\nlongLabel {0}_sun\ntype bigWig 0 4\nparent {0}_all\n"
+           "bigDataUrl {0}.sun_model.hg38.bedGraph\ncolor {SUN}\n\n")
     result = []
-    result.append("".join([container.format(uuid, "all"), all.format(uuid)]))
-    result.append("".join([container.format(uuid, "raw"), raw.format(uuid)]))
-    result.append("".join([container.format(uuid, "ilp"), ilp.format(uuid)]))
-    return "\n".join(result)
+    result.append("".join([container.format(uuid, "all", "IndividualRaw/Raw/SUN"), all.format(uuid, **colors)]))
+    #result.append("".join([container.format(uuid, "raw", "IndividualRaw/Raw"), raw.format(uuid, **colors)]))
+    #result.append("".join([container.format(uuid, "ilp"), ilp.format(uuid, **colors)]))
+    with open(os.path.join(out_dir, "hg38", "trackDb.txt"), "w") as outf:
+        outf.write("\n".join(result))
 
 
 def build_tracks(individual_ilp, individual_raw, raw, sun, out_dir, uuid, chrom_sizes):
-    for p in [individual_ilp, individual_raw, raw, sun]:
+    for p in [individual_ilp, individual_raw, raw]:
         subprocess.call("wigToBigWig {} {} {}".format(p, chrom_sizes, os.path.join(out_dir, "hg38",
-                                                                                   os.path.basename(p))))
+                                                                                   os.path.basename(p))),
+                        shell=True)
+    subprocess.call("bedGraphToBigWig {} {} {}".format(sun, chrom_sizes, os.path.join(out_dir, "hg38",
+                                                                                      os.path.basename(sun))),
+                    shell=True)
+
 
 def main():
     args = parse_args()
