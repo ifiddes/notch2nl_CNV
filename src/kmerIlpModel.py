@@ -1,7 +1,6 @@
 import pulp
 from collections import defaultdict
 from src.abstractIlpSolving import SequenceGraphLpProblem
-from src.helperFunctions import labels_from_kmer
 
 
 class Block(object):
@@ -12,19 +11,12 @@ class Block(object):
     """
     def __init__(self, subgraph, min_ploidy=0, max_ploidy=4):
         self._size = len(subgraph.source_kmers)
+        assert self._size > 0
+        self.kmers = subgraph.kmers
         self.variable_map = {}
         self.adjusted_count = None
         # each block gets its own trash bin - a place for extra kmer counts to go
         self.trash = pulp.LpVariable(str(id(self)), lowBound=0)
-        # adjust the kmer set to remove kmers flagged as bad
-        self.kmers = set()
-        for k in subgraph.kmers:
-            l, r = labels_from_kmer(k)
-            if 'bad' not in subgraph.edge[l][r]:
-                self.kmers.add(k)
-            else:
-                if k in subgraph.source_kmers:
-                    self._size -= 1
         for para in subgraph.paralogs:
             for start, stop in subgraph.paralogs[para]:
                 if self._size > 0:

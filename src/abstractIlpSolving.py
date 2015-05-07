@@ -148,19 +148,24 @@ class SequenceGraphLpProblem(object):
     def solve(self, save=None):
         """
         Solve the LP problem with CBC
-        
+
         If save is specified, it is a filename to which to save the LP problem
         in LP format.
-        
+
         You may only solve a SequenceGraphLpProblem once.
         """
         # Set up the penalties described by the penalty tree
         self.penalties.set_objective(self.problem)
         # Solve the problem
         try:
-            status = self.problem.solve(pulp.COIN_CMD(path=os.path.join(os.path.expanduser("~"), "bin", "cbc")))
+            status = self.problem.solve(pulp.COIN_CMD())
         except:
-            status = self.problem.solve(pulp.COIN_CMD(path="/usr/bin/cbc"))
+            paths = ["/usr/bin/cbc", "/usr/bin/local/cbc", os.path.join(os.path.expanduser("~"), "bin", "cbc")]
+            for p in paths:
+                if os.path.exists(p):
+                    status = self.problem.solve(pulp.COIN_CMD(path=p))
+                else:
+                    raise RuntimeError("Error: Was unable to find a CBC installation on this machine.")
         if status != pulp.constants.LpStatusOptimal:
             self.is_solved = False
             raise Exception("Unable to solve problem optimally.")
