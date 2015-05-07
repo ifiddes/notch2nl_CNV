@@ -11,8 +11,9 @@ class Block(object):
     """
     def __init__(self, subgraph, min_ploidy=0, max_ploidy=4):
         self._size = len(subgraph.source_kmers)
-        assert self._size > 0
         self.kmers = subgraph.kmers
+        assert self._size > 0
+        assert len(self.kmers) >= self._size
         self.variable_map = {}
         self.adjusted_count = None
         # each block gets its own trash bin - a place for extra kmer counts to go
@@ -134,7 +135,7 @@ class KmerIlpModel(SequenceGraphLpProblem):
             if len(block) == 0:
                 continue
             count = sum(kmer_counts.get(k, 0) for k in block.kmers)
-            adjusted_count = (2.0 * count) / (len(block.kmers) * normalizing)
+            adjusted_count = (2.0 * count) / (len(block) * normalizing)
             block.adjusted_count = adjusted_count
             self.constrain_approximately_equal(adjusted_count, sum(block.variables + [block.trash]),
                                                penalty=self.data_penalty)
