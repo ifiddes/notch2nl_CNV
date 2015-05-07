@@ -18,7 +18,7 @@ def parse_args():
     parser.add_argument("--out_dir", "-o", required=True, help="Dir to put assembly hub into.")
     parser.add_argument("--name", required=True, help="assembly hub name")
     parser.add_argument("--uuid", required=True, help='UUID')
-    parser.add_argument("--hg38_chrom_sizes", help="hg38 chrom.sizes file", default="hg38.chrom.sizes")
+    parser.add_argument("--hg38_chrom_sizes", help="hg38 chrom.sizes file", default="data/hg38.chrom.sizes")
     return parser.parse_args()
 
 
@@ -81,7 +81,7 @@ def main():
     raw = os.path.join(args.dir, args.uuid + ".RawCounts.hg38.wiggle")
     sun = os.path.join(args.dir, args.uuid + ".sun_model.hg38.bedGraph")
     start_hub(args.out_dir, args.uuid)
-    track_db(args.out_dir, uuid)
+    track_db(args.out_dir, args.name)
     build_tracks(individual_ilp, individual_raw, raw, sun, args.out_dir, args.uuid, args.hg38_chrom_sizes)
 
 
