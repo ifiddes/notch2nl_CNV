@@ -27,7 +27,7 @@ class Block(object):
                     self._size -= 1
         for para in subgraph.paralogs:
             for start, stop in subgraph.paralogs[para]:
-                if len(self.kmers) > 0:
+                if self._size > 0:
                     self.variable_map[(para, start, stop)] = pulp.LpVariable("{}_{}".format(para, start),
                                                                              lowBound=min_ploidy, upBound=max_ploidy,
                                                                              cat="Integer")

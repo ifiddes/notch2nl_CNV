@@ -7,7 +7,8 @@ unmasked_ref_path = "data/kmer_model_data/notch2nl_unmasked_hg38.fa"
 masked_ref_path = "data/kmer_model_data/notch2nl_masked_hg38.fa"
 graph = UnitigGraph(kmer_size=49, derived=False)
 add_mole_to_graph(graph, unmasked_ref_path, masked_ref_path)
-#add_individual_to_graph(graph, fastq_path)
+add_individual_to_graph(graph, "output/mike_sny/mike_sny.50mer.fa")
+graph.flag_nodes(open("data/kmer_model_data/bad_kmers.txt"))
 ilp_model = KmerIlpModel(graph)
 normalizing_kmers = get_normalizing_kmers("data/kmer_model_data/normalizing.fa", 49)
 data_counts, normalizing = get_kmer_counts(graph, normalizing_kmers, "output/mike_sny/mike_sny.49mer.fa")

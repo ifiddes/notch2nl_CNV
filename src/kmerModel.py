@@ -153,6 +153,7 @@ def add_mole_to_graph(graph, unmasked_mole, masked_mole):
         graph.add_source_sequence(name, offset, unmasked_seq)
     graph.prune_source_edges()
 
+
 def combined_plot(result_dict, raw_dict, graph, sun_results, uuid, out_path):
     """
     Generates a final combined plot overlaying both ILP and SUN results.
