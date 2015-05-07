@@ -51,7 +51,7 @@ class KmerModel(Target):
         graph.flag_nodes(open(self.paths.bad_kmers))
         normalizing_kmers = get_normalizing_kmers(self.paths.normalizing, self.ilp_config.kmer_size)
         try:
-            assert len(graph.kmers & normalizing_kmers) == 0
+            assert len(graph.source_kmers & normalizing_kmers) == 0
         except AssertionError:
             raise RuntimeError("Normalizing kmer file contains kmers in the input reference files.")
         data_counts, normalizing = get_kmer_counts(graph, normalizing_kmers, self.kmer_counts_path)
