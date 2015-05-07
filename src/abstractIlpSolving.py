@@ -157,7 +157,10 @@ class SequenceGraphLpProblem(object):
         # Set up the penalties described by the penalty tree
         self.penalties.set_objective(self.problem)
         # Solve the problem
-        status = self.problem.solve(pulp.COIN_CMD(path=os.path.join(os.path.expanduser("~"), "bin", "cbc")))
+        try:
+            status = self.problem.solve(pulp.COIN_CMD(path=os.path.join(os.path.expanduser("~"), "bin", "cbc")))
+        except:
+            status = self.problem.solve(pulp.COIN_CMD(path="/usr/bin/cbc"))
         if status != pulp.constants.LpStatusOptimal:
             self.is_solved = False
             raise Exception("Unable to solve problem optimally.")

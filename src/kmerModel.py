@@ -40,7 +40,7 @@ class KmerModel(Target):
 
     def run(self):
         graph = UnitigGraph(kmer_size=self.ilp_config.kmer_size, derived=False)
-        add_mole_to_graph(graph, self.paths.ilp_ref)
+        add_mole_to_graph(graph, self.paths.unmasked_ref, self.paths.masked_ref)
         if self.add_individual is True:
             add_individual_to_graph(graph, self.k_plus1_mer_counts_path)
             pickle.dump(graph, open(
@@ -127,23 +127,31 @@ def add_individual_to_graph(graph, k1mer_counts):
     graph.prune_individual_edges()
 
 
-def add_mole_to_graph(graph, mole):
+def add_mole_to_graph(graph, unmasked_mole, masked_mole):
     """
     Loops over the input sequences twice, first time builds a list of masked kmers, second time adds unmasked kmers
     to the graph.
     """
-    for name, seq in fasta_read(mole):
-        assert "N" not in seq
+    seq_map = {}
+    masked_seqs = {name: seq for name, seq in fasta_read(masked_mole)}
+    unmasked_seqs = {name: seq for name, seq in fasta_read(unmasked_mole)}
+    for name in masked_seqs:
+        masked_seq = masked_seqs[name]
+        unmasked_seq = unmasked_seqs[name]
+        assert "N" not in unmasked_seq
         assert "_" in name and len(name.split("_")) == 2
         name, offset = name.split("_")
         try:
             offset = int(offset)
         except TypeError:
             raise RuntimeError("Naming convention for input reference fasta is not right. >Sequence_Offset")
-        seq = seq.upper()
-        graph.add_source_sequence(name, offset, seq)
+        masked_seq = masked_seq.upper()
+        unmasked_seq = unmasked_seq.upper()
+        seq_map[(name, offset)] = [masked_seq, unmasked_seq]
+        graph.add_masked_kmers(masked_seq, unmasked_seq)
+    for (name, offset), (masked_seq, unmasked_seq) in seq_map.iteritems():
+        graph.add_source_sequence(name, offset, unmasked_seq)
     graph.prune_source_edges()
-
 
 def combined_plot(result_dict, raw_dict, graph, sun_results, uuid, out_path):
     """

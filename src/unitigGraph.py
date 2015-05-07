@@ -80,6 +80,7 @@ class UnitigGraph(nx.Graph):
 
     def _add_source_adjacency(self, a, a_canonical, b, b_canonical):
         self.kmers.update([a_canonical, b_canonical])
+        self.source_kmers.update([a_canonical, b_canonical])
         # make sure we aren't adding nodes - they should already exist now
         prev_kmer_size = len(self)
         l, r = self._determine_orientation(a, a_canonical, b, b_canonical)

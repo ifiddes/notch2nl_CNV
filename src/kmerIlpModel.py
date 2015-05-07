@@ -1,7 +1,7 @@
 import pulp
 from collections import defaultdict
 from src.abstractIlpSolving import SequenceGraphLpProblem
-from src.helperFunctions import remove_label, labels_from_kmer
+from src.helperFunctions import labels_from_kmer
 
 
 class Block(object):
