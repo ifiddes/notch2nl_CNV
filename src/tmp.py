@@ -67,9 +67,9 @@ masked_seq = "GCATTNTAAGACTNNGCTGTTATAA"
 unmasked_seq = "GCATTTTAAGACTGTGCTGTTATAA"
 name = "A"
 offset = 0
-graph = UnitigGraph(5)
+graph = UnitigGraph(5, derived=False)
 graph.add_masked_kmers(masked_seq, unmasked_seq)
-graph.add_source_sequence(name, offset, masked_seq, unmasked_seq)
+graph.add_source_sequence(name, offset, unmasked_seq)
 
 import cPickle as pickle
 from src.kmerModel import *

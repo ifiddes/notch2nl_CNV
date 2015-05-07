@@ -36,6 +36,8 @@ class UnitigGraph(nx.Graph):
         if derived is False:
             # these are edges that were pruned from the source graph and should NOT be re-introduced by the individual
             self.bad_source_edges = set()
+            # these are masked kmers used to prevent repeat masked sequence being added
+            self.masked_kmers = set()
 
     def _determine_orientation(self, prev, prev_canonical, kmer, kmer_canonical):
         if prev == prev_canonical:
@@ -56,38 +58,59 @@ class UnitigGraph(nx.Graph):
                 l, r = reverse_complement(prev) + "_L", reverse_complement(kmer) + "_R"
         return l, r
 
-    def add_source_sequence(self, name, offset, seq):
+    def _add_source_nodes(self, pos, name, a, b):
         """
-        Add source sequence to the graph. Should be unmasked sequence.
+        Produces two sets of sources nodes given a k+1mer, if they do not exist.
         """
-        assert name not in self.paralogs
-        self.paralogs[name] = [offset, offset + len(seq)]
-        self.paralogs = OrderedDict(sorted(self.paralogs.iteritems(), key=lambda x: x[0]))
-        prev_kmer = None
-        prev_canonical = None
-        for i in xrange(len(seq) - self.kmer_size + 1):
-            kmer = canonical(seq[i:i + self.kmer_size])
-            kmer_canonical = canonical(kmer)
-            self.kmers.add(kmer_canonical)
-            self.source_kmers.add(kmer_canonical)
-            l, r = labels_from_kmer(kmer_canonical)
+        # keep track of the graph as it grows and make sure its always an even # of nodes
+        prev_size = len(self)
+        for i, k in enumerate([a, b]):
+            l, r = labels_from_kmer(k)
             if self.has_node(l) is not True and self.has_node(r) is not True:
+                # should not be possible to have just left or just right
+                assert not (self.has_node(l) or self.has_node(r))
                 self.add_node(l)
                 self.add_node(r)
                 self.add_edge(l, r, positions=defaultdict(list))
-                self.edge[l][r]['positions'][name].append(i)
+                self.edge[l][r]['positions'][name].append(pos + i)
+                assert prev_size + 2 == len(self), (a, b)
+                prev_size = len(self)
             else:
-                self.edge[l][r]['positions'][name].append(i)
-            assert len(self) % 2 == 0
-            if prev_kmer is None:
-                prev_kmer = kmer
-                prev_canonical = kmer_canonical
-                continue
-            l, r = self._determine_orientation(prev_kmer, prev_canonical, kmer, kmer_canonical)
-            self.add_edge(l, r)
-            self.edge[l][r]['source'] = True
-            prev_kmer = kmer
-            prev_canonical = kmer_canonical
+                self.edge[l][r]['positions'][name].append(pos + i)
+
+    def _add_source_adjacency(self, a, b):
+        a_canonical = canonical(a)
+        b_canonical = canonical(b)
+        self.kmers.update([a_canonical, b_canonical])
+        # make sure we aren't adding nodes - they should already exist now
+        prev_kmer_size = len(self)
+        l, r = self._determine_orientation(a, a_canonical, b, b_canonical)
+        self.add_edge(l, r)
+        self.edge[l][r]['source'] = True
+        assert prev_kmer_size == len(self), (a, b)
+
+    def add_masked_kmers(self, masked_seq, unmasked_seq):
+        """
+        Builds the set of masked kmers. Should be ran before add_source_sequences()
+        """
+        for i in xrange(len(masked_seq) - self.kmer_size + 1):
+            if "N" in masked_seq[i:i + self.kmer_size]:
+                self.masked_kmers.add(canonical(unmasked_seq[i:i + self.kmer_size]))
+
+    def add_source_sequence(self, name, offset, unmasked_seq):
+        """
+        masked kmers should already have been added to the graph via add_masked_kmers()
+        """
+        assert name not in self.paralogs
+        self.paralogs[name] = [offset, offset + len(unmasked_seq)]
+        self.paralogs = OrderedDict(sorted(self.paralogs.iteritems(), key=lambda x: x[0]))
+        prev_kmer = None
+        for i in xrange(len(unmasked_seq) - self.kmer_size + 1):
+            k1mer = unmasked_seq[i:i + self.kmer_size + 1]
+            a, b = k1mer[:-1], k1mer[1:]
+            if a not in self.masked_kmers and b not in self.masked_kmers:
+                self._add_source_nodes(i, name, a, b)
+                self._add_source_adjacency(a, b)
 
     def add_individual_sequence(self, seq):
         """
