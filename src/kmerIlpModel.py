@@ -142,11 +142,7 @@ class KmerIlpModel(SequenceGraphLpProblem):
             if len(block) == 0:
                 continue
             count = sum(kmer_counts.get(k, 0) for k in block.kmers)
-            try:
-                adjusted_count = (2.0 * count) / (len(block.kmers) * normalizing)
-            except:
-                print "HERE", len(block.kmers), len(block)
-                assert False
+            adjusted_count = (2.0 * count) / (len(block.kmers) * normalizing)
             block.adjusted_count = adjusted_count
             self.constrain_approximately_equal(adjusted_count, sum(block.variables + [block.trash]),
                                                penalty=self.data_penalty)
