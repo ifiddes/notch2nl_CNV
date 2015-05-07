@@ -225,7 +225,7 @@ class UnitigGraph(nx.Graph):
         purposes.
         """
         self_loops = set(self.selfloop_edges())
-        for edge in self.edges():
+        for edge in self.edges_iter():
             if edge in self_loops:
                 continue
             l, r = edge

@@ -19,9 +19,12 @@ class Block(object):
         # adjust the kmer set to remove kmers flagged as bad
         self.kmers = set()
         for k in subgraph.kmers:
-            #l, r = labels_from_kmer(k)
-            #if 'bad' not in subgraph.edge[l][r]:
-            self.kmers.add(k)
+            l, r = labels_from_kmer(k)
+            if 'bad' not in subgraph.edge[l][r]:
+                self.kmers.add(k)
+            else:
+                if k in subgraph.source_kmers:
+                    self._size -= 1
         for para in subgraph.paralogs:
             for start, stop in subgraph.paralogs[para]:
                 if len(self.kmers) > 0:
@@ -139,7 +142,11 @@ class KmerIlpModel(SequenceGraphLpProblem):
             if len(block) == 0:
                 continue
             count = sum(kmer_counts.get(k, 0) for k in block.kmers)
-            adjusted_count = (2.0 * count) / (len(block.kmers) * normalizing)
+            try:
+                adjusted_count = (2.0 * count) / (len(block.kmers) * normalizing)
+            except:
+                print "HERE", len(block.kmers), len(block)
+                assert False
             block.adjusted_count = adjusted_count
             self.constrain_approximately_equal(adjusted_count, sum(block.variables + [block.trash]),
                                                penalty=self.data_penalty)

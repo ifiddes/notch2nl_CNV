@@ -135,3 +135,18 @@ with open(out_raw_path, "w") as outf:
         for start, stop, val in raw_dict[para]:
             outf.write("variableStep chrom=chr1 span={}\n".format(stop - start))
             outf.write("{} {}\n".format(start, val))
+
+
+
+# find subgraphs with individual edges
+individual = []
+original = []
+for subgraph in subgraphs:
+    for a, b in subgraph.edges_iter():
+        if 'source' not in subgraph.edge[a][b] and 'positions' not in subgraph.edge[a][b]:
+            individual.append(subgraph)
+            break
+    if len(individual) > 0 and individual[-1] != subgraph:
+        original.append(subgraph)
+
+#mike snyder: 2740 original, 706 individual

@@ -63,7 +63,7 @@ def overlay_raw_data(raw_dict, individual_raw_dict, mole_graph, individual_graph
             sun_pos, sun_vals = zip(*sun_results[para_map[para]])
             p.vlines(np.asarray(sun_pos), np.zeros(len(sun_pos)), sun_vals, color="#E83535", linewidth=0.5, alpha=0.5)
         for x in range(1, 4):
-            p.axhline(y=x, ls="--", lw=0.5)
+            p.axhline(y=x, ls="--", lw=0.5, color="black")
         p.set_title("{}".format(para))
     for i, (p, para) in enumerate(izip(plots, individual_graph.paralogs.iterkeys())):
         starts, stops, vals = zip(*individual_raw_dict[para])

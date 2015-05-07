@@ -48,7 +48,7 @@ class KmerModel(Target):
         else:
             pickle.dump(graph,
                         open(os.path.join(self.paths.out_dir, self.uuid, "{}_graph.pickle".format(self.uuid)), "w"))
-        # graph.flag_nodes(open(self.paths.bad_kmers))
+        graph.flag_nodes(open(self.paths.bad_kmers))
         normalizing_kmers = get_normalizing_kmers(self.paths.normalizing, self.ilp_config.kmer_size)
         try:
             assert len(graph.kmers & normalizing_kmers) == 0
@@ -71,7 +71,7 @@ class KmerModel(Target):
             out_ilp_path = os.path.join(self.paths.out_dir, self.uuid, "tracks",
                                         "{}.Individual.ILP.hg38.wiggle".format(self.uuid))
             # debugging code
-            r_d_path = os.path.join(self.paths.out_dir, self.uuid, self.uuid + ".RawData.pickle")
+            r_d_path = os.path.join(self.paths.out_dir, self.uuid, self.uuid + ".Individual.RawData.pickle")
             pickle.dump(raw_dict, open(r_d_path, "w"))
         else:
             out_png_path = os.path.join(self.paths.out_dir, self.uuid, self.uuid + ".png")
@@ -83,7 +83,7 @@ class KmerModel(Target):
             r_d_path = os.path.join(self.paths.out_dir, self.uuid, self.uuid + ".RawData.pickle")
             pickle.dump(raw_dict, open(r_d_path, "w"))
         combined_plot(result_dict, raw_dict, graph, self.sun_results, self.uuid, out_png_path)
-        generate_wiggle_plots(result_dict, raw_dict, self.uuid, out_raw_path, out_ilp_path)
+        generate_wiggle_plots(result_dict, raw_dict, out_raw_path, out_ilp_path)
 
 
 def get_normalizing_kmers(normalizing_path, kmer_size):
@@ -179,7 +179,7 @@ def combined_plot(result_dict, raw_dict, graph, sun_results, uuid, out_path):
     plt.close()
 
 
-def generate_wiggle_plots(result_dict, raw_dict, uuid, out_raw_path, out_ilp_path):
+def generate_wiggle_plots(result_dict, raw_dict, out_raw_path, out_ilp_path):
     """
     Generates wiggle plots for the UCSC browser on hg38
     """
