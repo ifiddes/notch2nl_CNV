@@ -58,29 +58,27 @@ class UnitigGraph(nx.Graph):
                 l, r = reverse_complement(prev) + "_L", reverse_complement(kmer) + "_R"
         return l, r
 
-    def _add_source_nodes(self, pos, name, a, b):
+    def _add_source_nodes(self, pos, name, a_canonical, b_canonical):
         """
         Produces two sets of sources nodes given a k+1mer, if they do not exist.
         """
         # keep track of the graph as it grows and make sure its always an even # of nodes
         prev_size = len(self)
-        for i, k in enumerate([a, b]):
+        for i, k in enumerate([a_canonical, b_canonical]):
             l, r = labels_from_kmer(k)
             if self.has_node(l) is not True and self.has_node(r) is not True:
                 # should not be possible to have just left or just right
                 assert not (self.has_node(l) or self.has_node(r))
                 self.add_node(l)
                 self.add_node(r)
-                self.add_edge(l, r, positions=defaultdict(list))
-                self.edge[l][r]['positions'][name].append(pos + i)
-                assert prev_size + 2 == len(self), (a, b)
+                self.add_edge(l, r, positions=defaultdict(set))
+                self.edge[l][r]['positions'][name].add(pos + i)
+                assert prev_size + 2 == len(self), (a_canonical, b_canonical)
                 prev_size = len(self)
             else:
-                self.edge[l][r]['positions'][name].append(pos + i)
+                self.edge[l][r]['positions'][name].add(pos + i)
 
-    def _add_source_adjacency(self, a, b):
-        a_canonical = canonical(a)
-        b_canonical = canonical(b)
+    def _add_source_adjacency(self, a, a_canonical, b, b_canonical):
         self.kmers.update([a_canonical, b_canonical])
         # make sure we aren't adding nodes - they should already exist now
         prev_kmer_size = len(self)
@@ -104,13 +102,13 @@ class UnitigGraph(nx.Graph):
         assert name not in self.paralogs
         self.paralogs[name] = [offset, offset + len(unmasked_seq)]
         self.paralogs = OrderedDict(sorted(self.paralogs.iteritems(), key=lambda x: x[0]))
-        prev_kmer = None
-        for i in xrange(len(unmasked_seq) - self.kmer_size + 1):
+        for i in xrange(len(unmasked_seq) - self.kmer_size):
             k1mer = unmasked_seq[i:i + self.kmer_size + 1]
             a, b = k1mer[:-1], k1mer[1:]
-            if a not in self.masked_kmers and b not in self.masked_kmers:
-                self._add_source_nodes(i, name, a, b)
-                self._add_source_adjacency(a, b)
+            a_canonical, b_canonical = canonical(a), canonical(b)
+            if a_canonical not in self.masked_kmers and b_canonical not in self.masked_kmers:
+                self._add_source_nodes(i, name, a_canonical, b_canonical)
+                self._add_source_adjacency(a, a_canonical, b, b_canonical)
 
     def add_individual_sequence(self, seq):
         """
