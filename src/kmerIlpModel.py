@@ -12,6 +12,7 @@ class Block(object):
     def __init__(self, subgraph, min_ploidy=0, max_ploidy=4):
         self._size = len(subgraph.source_kmers)
         self.kmers = subgraph.kmers
+        self.subgraph = subgraph
         assert self._size > 0
         assert len(self.kmers) >= self._size
         self.variable_map = {}
