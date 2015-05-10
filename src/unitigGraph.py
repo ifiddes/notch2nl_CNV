@@ -28,14 +28,16 @@ class UnitigGraph(nx.Graph):
     def __init__(self, kmer_size=49, derived=True):
         nx.Graph.__init__(self)
         self.kmer_size = kmer_size
-        self.paralogs = OrderedDict()
         self.kmers = set()
         self.source_kmers = set()
+        # this dict stores the source paralogs and their original genome positions
+        self.paralogs = OrderedDict()
         if derived is False:
             # masked kmers stores kmers that were repeat masked and should be ignored in individual data
             self.masked_kmers = set()
             # these are edges that were pruned from the source graph and should NOT be re-introduced by the individual
             self.bad_source_edges = set()
+
 
     def _build_source_nodes(self, kmer, pos, name):
         """
@@ -290,30 +292,23 @@ class UnitigGraph(nx.Graph):
 
     def connected_component_iter(self):
         """
-        Yields connected components.
-
-        TODO: right now this will 'forget' if a kmer came from more than one position.
-        This is not a problem with the base graph at 49bp kmers, but could be for smaller k values.
+        Yields connected components. Each subgraph is rebuilt to represent the kmers present within it.
         """
         for subgraph in nx.connected_component_subgraphs(self):
             # rebuild the kmer set based on this subgraph
             subgraph.kmers = {remove_label(n) for n in subgraph.nodes_iter()}
+            # rebuild the paralog dict, but only for paralogs in this subgraph
+            # first we find any sequence edge and find the associated paralogs - they should all be the same
+            for a, b in subgraph.edges_iter():
+                if 'positions' in subgraph.edge[a][b]:
+                    paralogs = sorted(subgraph.edge[a][b]['positions'].iterkeys())
+                    break
+            for para in paralogs:
+                subgraph.paralogs[para] = self.paralogs[para]
             # find which of these kmers are source kmers (used to normalize this unitig)
+            # TODO: does this introduce a bug where repeated calls in individual pruning leads to incorrectly small
+            # numbers of source_kmers?
             subgraph.source_kmers = self.source_kmers & subgraph.kmers
-            # now we find the smallest source position for each paralog
-            source_sequence_edges = [[a, b] for a, b in subgraph.edges_iter() if remove_label(a) == remove_label(b)
-                                     and 'positions' in subgraph.edge[a][b]]
-            tmp_map = defaultdict(list)
-            for a, b in source_sequence_edges:
-                for para, positions in subgraph.edge[a][b]['positions'].iteritems():
-                    tmp_map[para].extend(positions)
-            for para, positions in tmp_map.iteritems():
-                # this is where the bug is. Due to repeat masking, we can't know if a break in continuous integers
-                # in position values represents masked gaps or the unitig being represented more than once
-                sorted_positions = sorted(positions)
-                start = self.paralogs[para][0]
-                subgraph.paralogs[para] = [start + sorted_positions[0], start + sorted_positions[-1]]
-            subgraph.paralogs = OrderedDict(sorted(subgraph.paralogs.iteritems(), key=lambda x: x[0]))
             yield subgraph
 
     def flag_nodes(self, kmer_iter):

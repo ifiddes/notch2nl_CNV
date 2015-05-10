@@ -7,12 +7,14 @@ from src.helperFunctions import remove_label, labels_from_kmer
 class Block(object):
     """
     Represents one block (connected component). Each block may have anywhere from 1 to n paralogs represented in it.
-    Initialized by passing one connected component subgraph from a UnitigGraph. Creates a ILP variable for each
-    instance of a paralog in this unitig.
+    Initialized by passing one connected component subgraph from a UnitigGraph.
+
+    TODO: this new implementation removes the concept of instances. It is not possible for a unitig to appear more than
+    once in the source sequence. If it does, we will have no idea where it came from.
     """
     def __init__(self, subgraph, min_ploidy=0, max_ploidy=4):
         self._size = len(subgraph.source_kmers)
-        self.variable_map = {}
+        self.variables = {}
         self.adjusted_count = None
         # each block gets its own trash bin - a place for extra kmer counts to go
         self.trash = pulp.LpVariable(str(id(self)), lowBound=0)
@@ -20,26 +22,21 @@ class Block(object):
         self.kmers = set()
         for k in subgraph.kmers:
             l, r = labels_from_kmer(k)
-            #if 'bad' not in subgraph.edge[l][r]:
-            self.kmers.add(k)
-        for para, (start, stop) in subgraph.paralogs.iteritems():
+            if 'bad' not in subgraph.edge[l][r]:
+                self.kmers.add(k)
+        for para in subgraph.paralogs.iterkeys():
             if len(self.kmers) > 0:
-                self.variable_map[(para, start, stop)] = pulp.LpVariable("{}_{}".format(para, start), 
-                                                                         lowBound=min_ploidy, upBound=max_ploidy, 
-                                                                         cat="Integer")
+                self.variables[para] = pulp.LpVariable("{}_{}".format(para, str(id(self))), lowBound=min_ploidy,
+                                                       upBound=max_ploidy, cat="Integer")
             else:
-                self.variable_map[(para, start, stop)] = None
+                self.variables[para] = None
 
     def __len__(self):
         return self._size
 
-    def variable_iter(self):
-        for (para, start, stop), variable in self.variable_map.iteritems():
-            yield para, start, stop, variable
-
     @property
     def variables(self):
-        return [v for v in self.variable_map.itervalues() if v is not None]
+        return [v for v in self.variables.itervalues() if v is not None]
 
 
 class KmerIlpModel(SequenceGraphLpProblem):
@@ -91,7 +88,7 @@ class KmerIlpModel(SequenceGraphLpProblem):
 
         # build the block map, which relates a block to its position
         for block in self.blocks:
-            for para, start, stop, variable in block.variable_iter():
+            for para, variable in block.variables.iteritems():
                 self.block_map[para].append([start, stop, variable, block])
 
         # sort the block maps by start positions
