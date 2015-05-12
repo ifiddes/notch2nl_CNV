@@ -1,10 +1,13 @@
 import os
 import math
 import cPickle as pickle
-from collections import defaultdict
 from itertools import izip
 
 import matplotlib
+try:
+    import seaborn as sns
+except ImportError:
+    pass
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -62,8 +65,7 @@ class KmerModel(Target):
                                  infer_c=self.inferred_c, infer_d=self.inferred_d, default_ploidy=2)
         ilp_model.introduce_data(data_counts, normalizing)
         ilp_model.solve()
-        result_dict = ilp_model.report_copy_map()
-        raw_dict = ilp_model.report_normalized_raw_data_map()
+        ilp_result = ilp_model.report_copy_map()
         if self.add_individual is True:
             out_png_path = os.path.join(self.paths.out_dir, self.uuid, self.uuid + ".Individual.png")
             out_raw_path = os.path.join(self.paths.out_dir, self.uuid, "tracks",
@@ -72,7 +74,7 @@ class KmerModel(Target):
                                         "{}.Individual.ILP.hg38.wiggle".format(self.uuid))
             # debugging code
             r_d_path = os.path.join(self.paths.out_dir, self.uuid, self.uuid + ".RawData.pickle")
-            pickle.dump(raw_dict, open(r_d_path, "w"))
+            pickle.dump(ilp_result, open(r_d_path, "w"))
         else:
             out_png_path = os.path.join(self.paths.out_dir, self.uuid, self.uuid + ".png")
             out_raw_path = os.path.join(self.paths.out_dir, self.uuid, "tracks",
@@ -81,9 +83,9 @@ class KmerModel(Target):
                                         "{}.ILP.hg38.wiggle".format(self.uuid))
             # debugging code
             r_d_path = os.path.join(self.paths.out_dir, self.uuid, self.uuid + ".RawData.pickle")
-            pickle.dump(raw_dict, open(r_d_path, "w"))
-        combined_plot(result_dict, raw_dict, graph, self.sun_results, self.uuid, out_png_path)
-        generate_wiggle_plots(result_dict, raw_dict, graph, self.uuid, out_raw_path, out_ilp_path)
+            pickle.dump(ilp_result, open(r_d_path, "w"))
+        combined_plot(ilp_result, graph, self.sun_results, self.uuid, out_png_path)
+        generate_wiggle_plots(ilp_result, graph, self.uuid, out_raw_path, out_ilp_path)
 
 
 def get_normalizing_kmers(normalizing_path, kmer_size):
@@ -154,11 +156,11 @@ def add_mole_to_graph(graph, unmasked_mole, masked_mole):
     graph.prune_source_edges()
 
 
-def combined_plot(result_dict, raw_dict, graph, sun_results, uuid, out_path):
+def combined_plot(ilp_result, graph, sun_results, uuid, out_path):
     """
     Generates a final combined plot overlaying both ILP and SUN results.
     """
-    colors = ["#9b59b6", "#3498db", "#e74c3c", "#34495e", "#2ecc71"]
+    colors = sns.color_palette("Set1", 5)
     # used because the SUN model uses single letter labels
     para_map = {"Notch2NL-A": "A", "Notch2NL-B": "B", "Notch2NL-C": "C", "Notch2NL-D": "D", "Notch2": "N"}
     fig, plots = plt.subplots(len(graph.paralogs), sharey=True)
@@ -166,9 +168,9 @@ def combined_plot(result_dict, raw_dict, graph, sun_results, uuid, out_path):
     plt.suptitle("Unitig ILP and SUN results for {}".format(uuid))
     max_gap = max(stop - start for start, stop in graph.paralogs.itervalues())
     for i, (p, para) in enumerate(izip(plots, graph.paralogs.iterkeys())):
-        data = explode_result(result_dict[para], graph.paralogs[para])
-        raw_data = explode_result(raw_dict[para], graph.paralogs[para])
-        windowed_raw_data = [1.0 * sum(raw_data[k:k + 300]) / 300 for k in xrange(0, len(raw_data), 300)]
+        positions, vals, raw_vals = zip(*ilp_result[para])
+        windowed_raw_data = [1.0 * sum(raw_vals[k:k + 200]) / 200 for k in xrange(0, len(raw_vals), 200)]
+        windowed_data = [1.0 * sum(vals[k:k + 200]) / 200 for k in xrange(0, len(vals), 200)]
         start, stop = graph.paralogs[para]
         rounded_max_gap = int(math.ceil(1.0 * max_gap / 10000) * 10000)
         p.axis([start, start + rounded_max_gap, 0, 4])
@@ -208,16 +210,3 @@ def generate_wiggle_plots(result_dict, raw_dict, graph, uuid, out_raw_path, out_
             for start, stop, val in raw_dict[para]:
                 outf.write("variableStep chrom=chr1 span={}\n".format(stop - start))
                 outf.write("{} {}\n".format(start, val))
-
-
-def explode_result(result, graph_positions):
-    r = []
-    graph_start, graph_stop = graph_positions
-    prev_start = result[0][0]
-    r.extend([result[0][2]] * (prev_start - graph_start))
-    for start, stop, val in result:
-        r.extend([val] * (start - prev_start))
-        prev_start = start
-    r.extend([val] * (stop - start))
-    r.extend([val] * (graph_stop - stop))
-    return r

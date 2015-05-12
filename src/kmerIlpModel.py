@@ -1,7 +1,8 @@
 import pulp
 from collections import defaultdict
+from itertools import izip
 from src.abstractIlpSolving import SequenceGraphLpProblem
-from src.helperFunctions import remove_label, labels_from_kmer
+from src.helperFunctions import labels_from_kmer
 
 
 class Block(object):
@@ -10,11 +11,13 @@ class Block(object):
     Initialized by passing one connected component subgraph from a UnitigGraph.
 
     TODO: this new implementation removes the concept of instances. It is not possible for a unitig to appear more than
-    once in the source sequence. If it does, we will have no idea where it came from.
+    once in the source sequence. If it does, we will have no idea where it came from. I re-wrote UnitigGraph to fail
+    to build a graph if this happens.
     """
     def __init__(self, subgraph, min_ploidy=0, max_ploidy=4):
         self._size = len(subgraph.source_kmers)
-        self.variables = {}
+        self._variables = {}
+        self.paralogs = subgraph.paralogs.keys()
         self.adjusted_count = None
         # each block gets its own trash bin - a place for extra kmer counts to go
         self.trash = pulp.LpVariable(str(id(self)), lowBound=0)
@@ -26,17 +29,22 @@ class Block(object):
                 self.kmers.add(k)
         for para in subgraph.paralogs.iterkeys():
             if len(self.kmers) > 0:
-                self.variables[para] = pulp.LpVariable("{}_{}".format(para, str(id(self))), lowBound=min_ploidy,
-                                                       upBound=max_ploidy, cat="Integer")
+                self._variables[para] = pulp.LpVariable("{}_{}".format(para, str(id(self))), lowBound=min_ploidy,
+                                                        upBound=max_ploidy, cat="Integer")
             else:
-                self.variables[para] = None
+                self._variables[para] = None
+        self.variable_map = defaultdict(dict)
+        for k in subgraph.source_kmers:
+            l, r = labels_from_kmer(k)
+            for para, pos in subgraph.edge[l][r]['positions'].iteritems():
+                self.variable_map[para][pos] = self._variables[para]
 
     def __len__(self):
         return self._size
 
     @property
     def variables(self):
-        return [v for v in self.variables.itervalues() if v is not None]
+        return [v for v in self._variables.itervalues() if v is not None]
 
 
 class KmerIlpModel(SequenceGraphLpProblem):
@@ -72,8 +80,7 @@ class KmerIlpModel(SequenceGraphLpProblem):
                 self.expected_ploidy[para] = default_ploidy
         # list of Block objects
         self.blocks = []
-        # maps Block objects to the paralogs they contain
-        self.block_map = {x: [] for x in UnitigGraph.paralogs.iterkeys()}
+        self.block_map = defaultdict(list)
         self._build_blocks(UnitigGraph, infer_c, infer_d)
 
     def _build_blocks(self, UnitigGraph, infer_c, infer_d):
@@ -81,15 +88,16 @@ class KmerIlpModel(SequenceGraphLpProblem):
         Requires a UnitigGraph, which is a networkx UnitigGraph built over the genome region of interest.
         See unitigGraph.py
         """
-        # build the blocks, don't tie them together yet
+        # build the blocks
         for subgraph in UnitigGraph.connected_component_iter():
             b = Block(subgraph)
             self.blocks.append(b)
 
-        # build the block map, which relates a block to its position
-        for block in self.blocks:
-            for para, variable in block.variables.iteritems():
-                self.block_map[para].append([start, stop, variable, block])
+        # build the block map
+        for b in self.blocks:
+            for para in b.variable_map:
+                for pos, var in b.variable_map[para].iteritems():
+                    self.block_map[para].append([pos, var, b])
 
         # sort the block maps by start positions
         for para in self.block_map:
@@ -98,28 +106,27 @@ class KmerIlpModel(SequenceGraphLpProblem):
         # now we tie the blocks together
         for para in self.block_map:
             # filter out all blocks without variables (no kmers)
-            variables = [var for start, stop, var, block in self.block_map[para] if var is not None]
+            variables = [var for pos, var, block in self.block_map[para] if var is not None]
             for i in xrange(1, len(variables)):
                 var_a, var_b = variables[i - 1], variables[i]
-                self.constrain_approximately_equal(var_a, var_b, penalty=self.breakpoint_penalty)
+                if var_a != var_b:
+                    self.constrain_approximately_equal(var_a, var_b, penalty=self.breakpoint_penalty)
 
         # tie each block sum to be approximately equal to the expected value subject to expected_value_penalty
         for block in self.blocks:
-            exp = sum(self.expected_ploidy[p] for p, st, so, v in block.variable_iter() if v is not None)
+            exp = sum(self.expected_ploidy[p] for p in block.paralogs)
             self.constrain_approximately_equal(exp, sum(block.variables), penalty=self.expected_value_penalty)
 
         # now we force all Notch2 variables to be equal to 2
-        if "Notch2" in self.block_map:
-            for start, stop, var, block in self.block_map["Notch2"]:
-                self.add_constraint(var == 2)
+        for pos, var, block in self.block_map["Notch2"]:
+            self.add_constraint(var == 2)
 
         # if we have previously inferred C/D copy numbers, set those values
         if infer_c is not None:
-            for start, stop, var, block in self.block_map["Notch2NL-C"]:
+            for pos, var, block in self.block_map["Notch2NL-C"]:
                 self.add_constraint(var == infer_c)
-
         if infer_d is not None:
-            for start, stop, var, block in self.block_map["Notch2NL-D"]:
+            for pos, var, block in self.block_map["Notch2NL-D"]:
                 self.add_constraint(var == infer_d)
 
         # finally, constrain all trash bins to be as close to zero as possible
@@ -140,33 +147,16 @@ class KmerIlpModel(SequenceGraphLpProblem):
             self.constrain_approximately_equal(adjusted_count, sum(block.variables + [block.trash]),
                                                penalty=self.data_penalty)
 
-    def report_normalized_raw_data_map(self):
-        """
-        Reports copy number for each ILP variable, once. If a block lacks a variable, reports the previous value.
-        format [position, span, value]
-        """
-        copy_map = defaultdict(list)
+    def report_results(self):
+        result = defaultdict(list)
+        prev_var, prev_raw_val = None, None
         for para in self.block_map:
-            for i in xrange(len(self.block_map[para])):
-                start, stop, var, block = self.block_map[para][i]
+            for pos, var, block in self.block_map[para]:
+                raw_val = block.adjusted_count / len(block.variables)
                 if var is not None:
-                    copy_map[para].append([start, stop, block.adjusted_count / len(block.variables)])
-                    prev_var = block.adjusted_count / len(block.variables)
-                else:
-                    copy_map[para].append([start, stop, prev_var])
-        return copy_map
-
-    def report_copy_map(self):
-        """
-        Reports the raw counts seen at each variable. This is normalized by the number of variables in the block.
-        """
-        copy_map = defaultdict(list)
-        for para in self.block_map:
-            for i in xrange(len(self.block_map[para])):
-                start, stop, var, block = self.block_map[para][i]
-                if var is not None:
-                    copy_map[para].append([start, stop, pulp.value(var)])
-                    prev_var = pulp.value(var)
-                else:
-                    copy_map[para].append([start, stop, prev_var])
-        return copy_map
+                    result[para].append([pos, pulp.value(var), raw_val])
+                elif prev_var is not None:
+                    result[para].append([pos, prev_var, prev_raw_val])
+                prev_var = var
+                prev_raw_val = raw_val
+        return result

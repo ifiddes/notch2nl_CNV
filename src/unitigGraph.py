@@ -38,7 +38,6 @@ class UnitigGraph(nx.Graph):
             # these are edges that were pruned from the source graph and should NOT be re-introduced by the individual
             self.bad_source_edges = set()
 
-
     def _build_source_nodes(self, kmer, pos, name):
         """
         Takes a kmer, and adds it to the graph, constructing a sequence edge for the kmer.
@@ -53,11 +52,17 @@ class UnitigGraph(nx.Graph):
             assert not (self.has_node(l) or self.has_node(r))
             self.add_node(l)
             self.add_node(r)
-            self.add_edge(l, r, positions=defaultdict(list))
-            self.edge[l][r]['positions'][name].append(pos)
+            self.add_edge(l, r, positions={})
+            assert name not in self.edge[l][r]['positions'], "Error: this implementation cannot handle multiple" \
+                                                             "instances of a kmer in a block. Try a larger size kmer" \
+                                                             "or more repeat masking."
+            self.edge[l][r]['positions'][name] = pos
             assert prev_size + 2 == len(self)
         else:
-            self.edge[l][r]['positions'][name].append(pos)
+            assert name not in self.edge[l][r]['positions'], "Error: this implementation cannot handle multiple" \
+                                                             "instances of a kmer in a block. Try a larger size kmer" \
+                                                             "or more repeat masking."
+            self.edge[l][r]['positions'][name] = pos
             assert prev_size == len(self)
         self.kmers.add(kmer_canonical)
         self.source_kmers.add(kmer_canonical)
@@ -175,8 +180,8 @@ class UnitigGraph(nx.Graph):
                 # find the sequence edges this edge connect and check source sequences
                 a_l, a_r = labels_from_node(a)
                 b_l, b_r = labels_from_node(b)
-                a_seqs = [para * len(positions) for para, positions in self.edge[a_l][a_r]['positions'].iteritems()]
-                b_seqs = [para * len(positions) for para, positions in self.edge[b_l][b_r]['positions'].iteritems()]
+                a_seqs = self.edge[a_l][a_r]['positions'].keys()
+                b_seqs = self.edge[b_l][b_r]['positions'].keys()
                 if sorted(a_seqs) != sorted(b_seqs):
                     self.bad_source_edges.add(frozenset(sorted([a, b])))
         for a, b in self.bad_source_edges:
@@ -262,7 +267,7 @@ class UnitigGraph(nx.Graph):
         # make sure this worked...
         for i, subgraph in enumerate(self.connected_component_iter()):
             source_sequences = {tuple(subgraph.edge[a][b]['positions'].keys()) for a, b in
-                                    subgraph.edges_iter() if 'positions' in subgraph.edge[a][b]}
+                                subgraph.edges_iter() if 'positions' in subgraph.edge[a][b]}
             assert len(source_sequences) == 1
 
     def make_graphviz_labels(self):
@@ -281,9 +286,8 @@ class UnitigGraph(nx.Graph):
                 self.edge[l][r]['fontsize'] = 8
                 # make a fancy label for this sequence edge if its from a source sequence
                 if 'positions' in self.edge[l][r]:
-                    self.edge[l][r]["label"] = "\\n".join(sorted(
-                        [": ".join([y, ", ".join([str(x) for x in self.edge[l][r]['positions'][y]])]) for y in
-                         self.edge[l][r]['positions']]))
+                    self.edge[l][r]['label'] = "\\n".join(
+                        sorted([": ".join(map(str, x)) for x in self.edge[l][r]['positions'].iteritems()]))
                 self.edge[l][r]["color"] = "purple"
             elif 'source' in self.edge[l][r]:
                 self.edge[l][r]['color'] = "blue"
