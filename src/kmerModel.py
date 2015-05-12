@@ -63,7 +63,7 @@ class KmerModel(Target):
                                  infer_c=self.inferred_c, infer_d=self.inferred_d, default_ploidy=2)
         ilp_model.introduce_data(data_counts, normalizing)
         ilp_model.solve()
-        ilp_result = ilp_model.report_copy_map()
+        ilp_result = ilp_model.report_results()
         if self.add_individual is True:
             out_png_path = os.path.join(self.paths.out_dir, self.uuid, self.uuid + ".Individual.png")
             out_raw_path = os.path.join(self.paths.out_dir, self.uuid, "tracks",
@@ -83,7 +83,7 @@ class KmerModel(Target):
             r_d_path = os.path.join(self.paths.out_dir, self.uuid, self.uuid + ".RawData.pickle")
             pickle.dump(ilp_result, open(r_d_path, "w"))
         combined_plot(ilp_result, graph, self.sun_results, self.uuid, out_png_path)
-        generate_wiggle_plots(ilp_result, graph. self.uuid, out_raw_path, out_ilp_path)
+        generate_wiggle_plots(ilp_result, graph, self.uuid, out_raw_path, out_ilp_path)
 
 
 def get_normalizing_kmers(normalizing_path, kmer_size):

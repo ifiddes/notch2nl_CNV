@@ -32,7 +32,7 @@ class Block(object):
             l, r = labels_from_kmer(k)
             if 'bad' not in subgraph.edge[l][r]:
                 self.kmers.add(k)
-        for para in subgraph.paralogs.iterkeys():
+        for para in self.paralogs:
             if len(self.kmers) > 0:
                 self._variables[para] = pulp.LpVariable("{}_{}".format(para, str(id(self))), lowBound=min_ploidy,
                                                         upBound=max_ploidy, cat="Integer")
