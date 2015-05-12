@@ -2,14 +2,12 @@ import os
 import math
 import cPickle as pickle
 from itertools import izip
-
 import matplotlib
+matplotlib.use('Agg')
 try:
     import seaborn as sns
 except ImportError:
     pass
-
-matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -85,7 +83,7 @@ class KmerModel(Target):
             r_d_path = os.path.join(self.paths.out_dir, self.uuid, self.uuid + ".RawData.pickle")
             pickle.dump(ilp_result, open(r_d_path, "w"))
         combined_plot(ilp_result, graph, self.sun_results, self.uuid, out_png_path)
-        generate_wiggle_plots(ilp_result, graph, self.uuid, out_raw_path, out_ilp_path)
+        generate_wiggle_plots(ilp_result, graph. self.uuid, out_raw_path, out_ilp_path)
 
 
 def get_normalizing_kmers(normalizing_path, kmer_size):
@@ -169,44 +167,51 @@ def combined_plot(ilp_result, graph, sun_results, uuid, out_path):
     max_gap = max(stop - start for start, stop in graph.paralogs.itervalues())
     for i, (p, para) in enumerate(izip(plots, graph.paralogs.iterkeys())):
         positions, vals, raw_vals = zip(*ilp_result[para])
-        windowed_raw_data = [1.0 * sum(raw_vals[k:k + 200]) / 200 for k in xrange(0, len(raw_vals), 200)]
-        windowed_data = [1.0 * sum(vals[k:k + 200]) / 200 for k in xrange(0, len(vals), 200)]
+        windowed_raw_data = [1.0 * sum(raw_vals[k:k + 200]) / 200 for k in xrange(0, len(raw_vals) - 200, 200)]
+        windowed_data = [1.0 * sum(vals[k:k + 200]) / 200 for k in xrange(0, len(vals) - 200, 200)]
         start, stop = graph.paralogs[para]
+        windowed_positions = [int(round(start + 1.0 * sum(positions[k:k + 200]) / 200))
+                              for k in xrange(0, len(positions) - 200, 200)]
         rounded_max_gap = int(math.ceil(1.0 * max_gap / 10000) * 10000)
         p.axis([start, start + rounded_max_gap, 0, 4])
         x_ticks = [start] + range(start + 20000, start + rounded_max_gap + 20000, 20000)
         p.axes.set_xticks(x_ticks)
         p.axes.set_xticklabels(["{:.3e}".format(start)] + [str(20000 * x) for x in xrange(1, len(x_ticks))])
-        p.fill_between(range(start, stop), data, color=colors[i], alpha=0.8)
-        p.plot(range(start, stop, 300), windowed_raw_data, alpha=0.8, linewidth=1.5)
+        p.fill_between(windowed_positions, windowed_data, color=colors[i], alpha=0.8)
+        p.plot(windowed_positions, windowed_raw_data, alpha=0.8, linewidth=1.5)
         if len(sun_results[para_map[para]]) > 0:
             sun_pos, sun_vals = zip(*sun_results[para_map[para]])
             p.vlines(np.asarray(sun_pos), np.zeros(len(sun_pos)), sun_vals, color="#E83535")
-        for i in range(1, 4):
-            p.axhline(y=i, ls="--", lw=0.7)
         p.set_title("{}".format(para))
+        if para in ["Notch2NL-C", "Notch2NL-D"]:
+            p.invert_xaxis()
     fig.subplots_adjust(hspace=0.8)
     plt.savefig(out_path, format="png")
     plt.close()
 
 
-def generate_wiggle_plots(result_dict, raw_dict, graph, uuid, out_raw_path, out_ilp_path):
+def generate_wiggle_plots(ilp_result, graph, uuid, out_raw_path, out_ilp_path):
     """
     Generates wiggle plots for the UCSC browser on hg38
     """
     with open(out_ilp_path, "w") as outf:
         outf.write(
-            "track type=wiggle_0 name={} color=35,125,191 autoScale=off visibility=full alwaysZero=on "
+            "track type=wiggle_0 name={}_ILP color=35,125,191 autoScale=off visibility=full alwaysZero=on "
             "yLineMark=2 viewLimits=0:4 yLineOnOff=on maxHeightPixels=100:75:50\n".format(uuid))
-        for para in result_dict:
-            for start, stop, val in result_dict[para]:
-                outf.write("variableStep chrom=chr1 span={}\n".format(stop - start))
-                outf.write("{} {}\n".format(start, val))
+        for para in ilp_result:
+            outf.write("fixedStep chrom=chr1 span=200 step=200 start={}\n".format(graph.paralogs[para][0]))
+            positions, vals, raw_vals = zip(*ilp_result[para])
+            windowed_data = [1.0 * sum(vals[k:k + 200]) / 200 for k in xrange(0, len(vals) - 200, 200)]
+            start, stop = graph.paralogs[para]
+            for val in windowed_data:
+                outf.write("{}\n".format(val))
     with open(out_raw_path, "w") as outf:
         outf.write(
-            "track type=wiggle_0 name={} color=35,125,191 autoScale=off visibility=full alwaysZero=on "
+            "track type=wiggle_0 name={}_RawData color=35,125,191 autoScale=off visibility=full alwaysZero=on "
             "yLineMark=2 viewLimits=0:4 yLineOnOff=on maxHeightPixels=100:75:50\n".format(uuid))
-        for para in raw_dict:
-            for start, stop, val in raw_dict[para]:
-                outf.write("variableStep chrom=chr1 span={}\n".format(stop - start))
-                outf.write("{} {}\n".format(start, val))
+        for para in ilp_result:
+            outf.write("fixedStep chrom=chr1 span=200 step=200 start={}\n".format(graph.paralogs[para][0]))
+            positions, vals, raw_vals = zip(*ilp_result[para])
+            windowed_raw_data = [1.0 * sum(raw_vals[k:k + 200]) / 200 for k in xrange(0, len(raw_vals) - 200, 200)]
+            for val in windowed_raw_data:
+                outf.write("{}\n".format(val))
