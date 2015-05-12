@@ -69,7 +69,7 @@ class SunModel(Target):
         merged_results = [[pos, val] for result in sun_results.itervalues() for pos, val in result]
         sorted_merged_results = sorted(merged_results, key=lambda x: x[0])
         with open(path, "w") as outf:
-            bed_header = ("track type=bedGraph name={} autoScale=off visibility=full alwaysZero=on yLineMark=2 "
+            bed_header = ("track type=bedGraph name={}_SUN autoScale=off visibility=full alwaysZero=on yLineMark=2 "
                           "viewLimits=0:4 yLineOnOff=on maxHeightPixels=100:75:50\n")
             outf.write(bed_header.format(self.uuid))
             for pos, val in sorted_merged_results:

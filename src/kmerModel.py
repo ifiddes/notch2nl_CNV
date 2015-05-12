@@ -194,7 +194,7 @@ def generate_wiggle_plots(result_dict, raw_dict, graph, uuid, out_raw_path, out_
     """
     with open(out_ilp_path, "w") as outf:
         outf.write(
-            "track type=wiggle_0 name={} color=35,125,191 autoScale=off visibility=full alwaysZero=on "
+            "track type=wiggle_0 name={}_ILP_Result color=35,125,191 autoScale=off visibility=full alwaysZero=on "
             "yLineMark=2 viewLimits=0:4 yLineOnOff=on maxHeightPixels=100:75:50\n".format(uuid))
         for para in result_dict:
             for start, stop, val in result_dict[para]:
@@ -202,7 +202,7 @@ def generate_wiggle_plots(result_dict, raw_dict, graph, uuid, out_raw_path, out_
                 outf.write("{} {}\n".format(start, val))
     with open(out_raw_path, "w") as outf:
         outf.write(
-            "track type=wiggle_0 name={} color=35,125,191 autoScale=off visibility=full alwaysZero=on "
+            "track type=wiggle_0 name={}_Raw_Counts color=35,125,191 autoScale=off visibility=full alwaysZero=on "
             "yLineMark=2 viewLimits=0:4 yLineOnOff=on maxHeightPixels=100:75:50\n".format(uuid))
         for para in raw_dict:
             for start, stop, val in raw_dict[para]:

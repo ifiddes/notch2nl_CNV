@@ -90,3 +90,78 @@ sun_results = pickle.load(open("output/b88da23c/sun_results.pickle"))
 result_dict = ilp_model.report_copy_map()
 raw_counts = ilp_model.report_normalized_raw_data_map()
 combined_plot(result_dict, raw_counts, graph.paralogs, sun_results, "b88", "./")
+
+
+
+
+from src.unitigGraph import *
+from src.helperFunctions import *
+from src.kmerModel import *
+from src.kmerIlpModel import *
+graph = UnitigGraph(7, derived=False)
+masked_mole = unmasked_mole = "test/test_ref_short.fa"
+seq_map = {}
+masked_seqs = {name: seq for name, seq in fasta_read(masked_mole)}
+unmasked_seqs = {name: seq for name, seq in fasta_read(unmasked_mole)}
+for name in masked_seqs:
+    masked_seq = masked_seqs[name]
+    unmasked_seq = unmasked_seqs[name]
+    assert "N" not in unmasked_seq
+    assert "_" in name and len(name.split("_")) == 2
+    name, offset = name.split("_")
+    try:
+        offset = int(offset)
+    except TypeError:
+        raise RuntimeError("Naming convention for input reference fasta is not right. >Sequence_Offset")
+    masked_seq = masked_seq.upper()
+    unmasked_seq = unmasked_seq.upper()
+    seq_map[(name, offset)] = [masked_seq, unmasked_seq]
+    graph.add_masked_kmers(masked_seq, unmasked_seq)
+
+for (name, offset), (masked_seq, unmasked_seq) in seq_map.iteritems():
+    graph.add_source_sequence(name, offset, masked_seq, unmasked_seq)
+
+
+for subgraph in graph.connected_component_iter():
+    sequence_edges = [e for e in subgraph.edges_iter() if 'positions' in subgraph.edge[e[0]][e[1]]]
+    ordering = defaultdict(list)
+    for a, b in sequence_edges:
+        for para in subgraph.edge[a][b]['positions']:
+            pos = subgraph.edge[a][b]['positions'][para][0]
+            ordering[para].append([pos, a[:-2]])
+
+
+for para, vals in ordering.iteritems():
+    ordering[para] = sorted(vals, key=lambda x: x[0])
+
+
+new_graph = nx.DiGraph()
+for subgraph in graph.connected_component_iter():
+    sequence_edges = [e for e in subgraph.edges_iter() if 'positions' in subgraph.edge[e[0]][e[1]]]
+    adjacency_edges = [e for e in subgraph.edges_iter() if 'source' in subgraph.edge[e[0]][e[1]]]
+    new_edges = [e for e in subgraph.edges_iter() if 'source' not in subgraph.edge[e[0]][e[1]] and 'positions' not in subgraph.edge[e[0]][e[1]]]
+    for a, b in adjacency_edges:
+        l, r = a[:-2], b[:-2]
+        new_graph.add_edge(l, r)
+        new_graph.node[l]['positions'] = subgraph.edge[l + "_R"][l + "_L"]
+        new_graph.node[r]['positions'] = subgraph.edge[r + "_R"][r + "_L"]
+        new_graph.node[l]['source'] = new_graph.node[r]['source'] = True
+    for a, b in new_edges:
+        l, r = a[:-2], b[:-2]
+        new_graph.add_edge(l, r)
+
+for a, b in new_graph.edges_iter():
+    new_graph.node[a]['fontsize'] = new_graph.node[b]['fontsize'] = 10
+    new_graph.edge[a][b]['penwidth'] = 3
+    if 'positions' in new_graph.node[a]:
+        new_graph.node[a]["label"] = "\\n".join(sorted(
+            [": ".join([y, ", ".join([str(x) for x in new_graph.node[a]['positions'][y]])]) for y in
+             new_graph.node[a]['positions']]))
+        new_graph.node[a]["color"] = "purple"
+    if 'positions' in new_graph.node[b]:
+        new_graph.node[b]["label"] = "\\n".join(sorted(
+            [": ".join([y, ", ".join([str(x) for x in new_graph.node[b]['positions'][y]])]) for y in
+             new_graph.node[b]['positions']]))
+        new_graph.node[b]["color"] = "purple"
+    else:
+        new_graph
