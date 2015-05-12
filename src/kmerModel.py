@@ -158,7 +158,7 @@ def combined_plot(ilp_result, graph, sun_results, uuid, out_path):
     """
     Generates a final combined plot overlaying both ILP and SUN results.
     """
-    colors = sns.color_palette("Set1", 5)
+    colors = sns.color_palette()
     # used because the SUN model uses single letter labels
     para_map = {"Notch2NL-A": "A", "Notch2NL-B": "B", "Notch2NL-C": "C", "Notch2NL-D": "D", "Notch2": "N"}
     fig, plots = plt.subplots(len(graph.paralogs), sharey=True)
@@ -178,10 +178,10 @@ def combined_plot(ilp_result, graph, sun_results, uuid, out_path):
         p.axes.set_xticks(x_ticks)
         p.axes.set_xticklabels(["{:.3e}".format(start)] + [str(20000 * x) for x in xrange(1, len(x_ticks))])
         p.fill_between(windowed_positions, windowed_data, color=colors[i], alpha=0.8)
-        p.plot(windowed_positions, windowed_raw_data, alpha=0.8, linewidth=1.5)
+        p.plot(windowed_positions, windowed_raw_data, alpha=0.8, linewidth=1.5, color="black")
         if len(sun_results[para_map[para]]) > 0:
             sun_pos, sun_vals = zip(*sun_results[para_map[para]])
-            p.vlines(np.asarray(sun_pos), np.zeros(len(sun_pos)), sun_vals, color="#E83535")
+            p.vlines(np.asarray(sun_pos), np.zeros(len(sun_pos)), sun_vals, color=colors[-1], linewidth=0.7)
         p.set_title("{}".format(para))
         if para in ["Notch2NL-C", "Notch2NL-D"]:
             p.invert_xaxis()
