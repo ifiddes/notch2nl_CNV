@@ -302,14 +302,15 @@ class UnitigGraph(nx.Graph):
             paralogs = []
             # rebuild the kmer set based on this subgraph
             subgraph.kmers = {remove_label(n) for n in subgraph.nodes_iter()}
+            # TODO: figure out why this doesn't work in individual graphs.
             # rebuild the paralog dict, but only for paralogs in this subgraph
             # first we find any sequence edge and find the associated paralogs - they should all be the same
-            for a, b in subgraph.edges_iter():
-                if 'positions' in subgraph.edge[a][b]:
-                    paralogs = sorted(subgraph.edge[a][b]['positions'].iterkeys())
-                    break
-            for para in paralogs:
-                subgraph.paralogs[para] = self.paralogs[para]
+            # for a, b in subgraph.edges_iter():
+            #     if 'positions' in subgraph.edge[a][b]:
+            #         paralogs = sorted(subgraph.edge[a][b]['positions'].iterkeys())
+            #         break
+            # for para in paralogs:
+            #     subgraph.paralogs[para] = self.paralogs[para]
             # find which of these kmers are source kmers (used to normalize this unitig)
             # TODO: does this introduce a bug where repeated calls in individual pruning leads to incorrectly small
             # numbers of source_kmers?

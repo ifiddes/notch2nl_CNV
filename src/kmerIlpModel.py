@@ -17,7 +17,12 @@ class Block(object):
     def __init__(self, subgraph, min_ploidy=0, max_ploidy=4):
         self._size = len(subgraph.source_kmers)
         self._variables = {}
-        self.paralogs = subgraph.paralogs.keys()
+        self.paralogs = None
+        for a, b in subgraph.edges_iter():
+            if 'positions' in subgraph.edge[a][b]:
+                self.paralogs = sorted(subgraph.edge[a][b]['positions'].iterkeys())
+                break
+        assert self.paralogs is not None
         self.adjusted_count = None
         # each block gets its own trash bin - a place for extra kmer counts to go
         self.trash = pulp.LpVariable(str(id(self)), lowBound=0)
