@@ -299,6 +299,7 @@ class UnitigGraph(nx.Graph):
         Yields connected components. Each subgraph is rebuilt to represent the kmers present within it.
         """
         for subgraph in nx.connected_component_subgraphs(self):
+            paralogs = []
             # rebuild the kmer set based on this subgraph
             subgraph.kmers = {remove_label(n) for n in subgraph.nodes_iter()}
             # rebuild the paralog dict, but only for paralogs in this subgraph
