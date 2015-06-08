@@ -6,12 +6,12 @@ from jobTree.src.bioio import system
 
 
 class PrepareData(Target):
-    def __init__(self, paths, ilp_config, uuid, query_string):
+    def __init__(self, paths, ilp_config, uuid, query_strings):
         Target.__init__(self)
         self.paths = paths
         self.ilp_config = ilp_config
         self.uuid = uuid
-        self.query_string = query_string
+        self.query_strings = query_strings
 
     def run(self):
         out_dir = os.path.join(self.paths.out_dir, self.uuid)
@@ -22,7 +22,8 @@ class PrepareData(Target):
         kmer_counts_path = os.path.join(out_dir, self.uuid + ".{}mer.fa".format(self.ilp_config.kmer_size))
         k_plus1_mer_counts_path = os.path.join(out_dir, self.uuid + ".{}mer.fa".format(self.ilp_config.kmer_size + 1))
         if not os.path.exists(fastq_path):
-            download_query(fastq_path, self.getLocalTempDir(), self.paths.key_file, self.query_string, self.uuid)
+            download_query(fastq_path, self.getGlobalTempDir(), self.paths.key_file, self.query_strings, self.uuid)
+            #download_query(fastq_path, self.getLocalTempDir(), self.paths.key_file, self.query_strings, self.uuid)
         if not os.path.exists(bam_path):
             self.addChildTargetFn(align_query, args=(fastq_path, bam_path, self.uuid, self.paths.aln_index))
         if not os.path.exists(kmer_counts_path) or not os.path.exists(k_plus1_mer_counts_path):
@@ -32,15 +33,19 @@ class PrepareData(Target):
                                           kmer_counts_path, k_plus1_mer_counts_path))
 
 
-def download_query(fastq_tmp_path, tmp_dir, key_file, query_string, uuid):
+def download_query(fastq_path, tmp_dir, key_file, query_strings, uuid):
     """
     Downloads data from CGHub BAM Slicer
     """
     key = open(key_file).readline().rstrip()
-    system("""curl --silent "{}" -u "{}" | samtools bamshuf -Ou - {} | samtools bam2fq - > {}""".format(
-           query_string, "haussler:" + key, os.path.join(tmp_dir, "tmp"), fastq_tmp_path))
-    os.remove(os.path.join(tmp_dir, "tmp"))
-    if os.path.getsize(fastq_tmp_path) < 513:
+    bam_paths = []
+    for i, s in enumerate(query_strings):
+        tmp_bam_path = os.path.join(tmp_dir, "{}.{}.bam".format(uuid, i))
+        system("""curl --silent "{}" -u "{}" > {} """.format(s, "haussler:" + key, tmp_bam_path))
+        bam_paths.append(tmp_bam_path)
+    bam_path_str = " ".join(bam_paths)
+    system("samtools cat {} | samtools bamshuf -Ou - {} | samtools bam2fq - > {}".format(bam_path_str, os.path.join(tmp_dir, "tmp"), fastq_path))
+    if os.path.getsize(fastq_path) < 513:
         raise RuntimeError("curl did not download a BAM for {}. exiting.".format(uuid))
 
 
@@ -53,10 +58,8 @@ def run_jellyfish(target, jf_counts, k_plus1_mer_counts, fastq, uuid, kmer_size)
     jf_file = os.path.join(target.getLocalTempDir(), uuid + ".jf")
     system("jellyfish count -C -m {} -s 200M -o {} {}".format(kmer_size, jf_file, fastq))
     system("jellyfish dump {} > {}".format(jf_file, jf_counts))
-    os.remove(jf_file)
     system("jellyfish count -C -m {} --bf-size 1G -s 200M -o {} {}".format(kmer_size + 1, jf_file, fastq))
     system("jellyfish dump {} > {}".format(jf_file, k_plus1_mer_counts))
-    os.remove(jf_file)
 
 
 def align_query(target, fastq, bam, uuid, index):

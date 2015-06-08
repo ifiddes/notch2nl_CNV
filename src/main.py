@@ -53,10 +53,10 @@ def build_parser():
 
 
 def build_analyses(target, paths, ilp_config, cgquery_dict):
-    for uuid, query_string in cgquery_dict.iteritems():
+    for uuid, query_strings in cgquery_dict.iteritems():
         # unlikely to have uuid collisions at 8 characters, easier to read
         uuid = uuid[:8]
-        target.addChildTarget(PrepareData(paths, ilp_config, uuid, query_string))
+        target.addChildTarget(PrepareData(paths, ilp_config, uuid, query_strings))
 
 
 def main():

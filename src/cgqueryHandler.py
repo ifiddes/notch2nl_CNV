@@ -80,7 +80,8 @@ def build_bamslicer_query(analysis, refassem_short_name, ranges):
     base_path = "https://slicer.cghub.ucsc.edu/analyses/{}/slices?ref={}&format=bam".format(analysis,
             refassem_short_name)
     query_string = "".join([base_path, formatted_ranges])
-    return query_string
+    unmapped_query_string = "".join([base_path, '&range="*"'])
+    return [query_string, unmapped_query_string]
 
 
 def main():
@@ -90,8 +91,8 @@ def main():
 
     query_dict = {}
     for analysis, refassem_short_name in analysis_dict.iteritems():
-        query_string = build_bamslicer_query(analysis, refassem_short_name, args.target_range)
-        query_dict[analysis] = query_string
+        query_strings = build_bamslicer_query(analysis, refassem_short_name, args.target_range)
+        query_dict[analysis] = query_strings
 
     if args.debug_cutoff is None:
         pickle.dump(query_dict, args.out)
