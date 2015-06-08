@@ -39,13 +39,13 @@ def build_parser():
     ####################################################################################################################
     # ilp_config
     ####################################################################################################################
-    parser.add_argument("--breakpoint_penalty", type=float, default=35.0,
+    parser.add_argument("--breakpoint_penalty", type=float, default=20.0,
                         help="breakpoint penalty used for ILP model.")
-    parser.add_argument("--data_penalty", type=float, default=1.5,
+    parser.add_argument("--data_penalty", type=float, default=2.0,
                         help="data penalty used for ILP model.")
-    parser.add_argument("--expected_value_penalty", type=float, default=0.05,
+    parser.add_argument("--expected_value_penalty", type=float, default=0.08,
                         help="How closely should a copy number of 2 be enforced?")
-    parser.add_argument("--trash_penalty", type=float, default=1.0,
+    parser.add_argument("--trash_penalty", type=float, default=0.5,
                         help="How closely should we keep the trash to 0? (How many kmers do we expect to have excess"
                              "counts?)")
     parser.add_argument("--kmer_size", type=int, default=49, help="kmer size")

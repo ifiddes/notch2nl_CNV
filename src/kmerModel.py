@@ -178,10 +178,10 @@ def combined_plot(ilp_result, graph, sun_results, uuid, out_path):
         p.axes.set_xticks(x_ticks)
         p.axes.set_xticklabels(["{:.3e}".format(start)] + [str(20000 * x) for x in xrange(1, len(x_ticks))])
         p.fill_between(windowed_positions, windowed_data, color=colors[i], alpha=0.8)
-        p.plot(windowed_positions, windowed_raw_data, alpha=0.8, linewidth=1.5, color="black")
+        p.plot(windowed_positions, windowed_raw_data, alpha=0.8, color="black", linewidth=0.8)
         if len(sun_results[para_map[para]]) > 0:
             sun_pos, sun_vals = zip(*sun_results[para_map[para]])
-            p.vlines(np.asarray(sun_pos), np.zeros(len(sun_pos)), sun_vals, color=colors[-1], linewidth=0.7)
+            p.vlines(np.asarray(sun_pos), np.zeros(len(sun_pos)), sun_vals, color="#75070D", linewidth=0.8)
         p.set_title("{}".format(para))
         if para in ["Notch2NL-C", "Notch2NL-D"]:
             p.invert_xaxis()
@@ -198,20 +198,25 @@ def generate_wiggle_plots(ilp_result, graph, uuid, out_raw_path, out_ilp_path):
         outf.write(
             "track type=wiggle_0 name={}_ILP color=35,125,191 autoScale=off visibility=full alwaysZero=on "
             "yLineMark=2 viewLimits=0:4 yLineOnOff=on maxHeightPixels=100:75:50\n".format(uuid))
+        outf.write("variableStep chrom=chr1 span=200\n")
         for para in ilp_result:
-            outf.write("fixedStep chrom=chr1 span=200 step=200 start={}\n".format(graph.paralogs[para][0]))
             positions, vals, raw_vals = zip(*ilp_result[para])
             windowed_data = [1.0 * sum(vals[k:k + 200]) / 200 for k in xrange(0, len(vals) - 200, 200)]
             start, stop = graph.paralogs[para]
-            for val in windowed_data:
-                outf.write("{}\n".format(val))
+            windowed_positions = [int(round(start + 1.0 * sum(positions[k:k + 200]) / 200))
+                              for k in xrange(0, len(positions) - 200, 200)]
+            for pos, val in izip(windowed_positions, windowed_data):
+                outf.write("{} {}\n".format(pos, val))
     with open(out_raw_path, "w") as outf:
         outf.write(
             "track type=wiggle_0 name={}_RawData color=35,125,191 autoScale=off visibility=full alwaysZero=on "
             "yLineMark=2 viewLimits=0:4 yLineOnOff=on maxHeightPixels=100:75:50\n".format(uuid))
+        outf.write("variableStep chrom=chr1 span=200\n")
         for para in ilp_result:
-            outf.write("fixedStep chrom=chr1 span=200 step=200 start={}\n".format(graph.paralogs[para][0]))
             positions, vals, raw_vals = zip(*ilp_result[para])
             windowed_raw_data = [1.0 * sum(raw_vals[k:k + 200]) / 200 for k in xrange(0, len(raw_vals) - 200, 200)]
-            for val in windowed_raw_data:
-                outf.write("{}\n".format(val))
+            start, stop = graph.paralogs[para]
+            windowed_positions = [int(round(start + 1.0 * sum(positions[k:k + 200]) / 200))
+                              for k in xrange(0, len(positions) - 200, 200)]
+            for pos, val in izip(windowed_positions, windowed_raw_data):
+                outf.write("{} {}\n".format(pos, val))

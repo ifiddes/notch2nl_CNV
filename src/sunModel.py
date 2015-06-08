@@ -87,8 +87,8 @@ class SunModel(Target):
 
 def kmerModelWrapperFn(target, paths, uuid, ilp_config, sun_results, fastq_path, kmer_counts_path, 
                        k_plus1_mer_counts_path, inferred_c, inferred_d):
-    target.addChildTarget(KmerModel(paths, uuid, ilp_config, sun_results, fastq_path, kmer_counts_path, 
-                                    k_plus1_mer_counts_path, inferred_c, inferred_d, add_individual=True))
+    #target.addChildTarget(KmerModel(paths, uuid, ilp_config, sun_results, fastq_path, kmer_counts_path, 
+    #                                k_plus1_mer_counts_path, inferred_c, inferred_d, add_individual=True))
     target.addChildTarget(KmerModel(paths, uuid, ilp_config, sun_results, fastq_path, kmer_counts_path, 
                                     k_plus1_mer_counts_path, inferred_c, inferred_d, add_individual=False))
 
