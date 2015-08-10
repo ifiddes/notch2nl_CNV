@@ -34,8 +34,8 @@ def build_parser():
                         help="unmasked reference for ILP model.")
     parser.add_argument("--bad_kmers", default="data/kmer_model_data/bad_kmers.txt",
                         help="bad kmers. These are kmers present elsewhere in genome that are in the reference files.")
-    parser.add_argument("--normalizing", default="data/kmer_model_data/normalizing.fa",
-                        help="fasta file containing a normalizing region with expected copy number 2.")
+    parser.add_argument("--normalizing", default="data/kmer_model_data/normalizing.txt",
+                        help="Text file containing a normalizing region with expected copy number 10 (kmers shared by all paralogs).")
     ####################################################################################################################
     # ilp_config
     ####################################################################################################################
